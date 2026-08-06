@@ -1,0 +1,129 @@
+"""
+SQLAlchemy models — must match DATABASE_SCHEMA.md exactly.
+
+Table order (respects FK dependencies, matches migration plan):
+users -> devices -> sensor_readings -> incidents -> alerts
+"""
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(50), nullable=False, default="operator", server_default="operator")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class Device(Base):
+    __tablename__ = "devices"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    device_code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    device_type: Mapped[str] = mapped_column(String(50), nullable=False)  # simulator | esp32
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    sensor_readings: Mapped[list["SensorReading"]] = relationship(back_populates="device")
+    incidents: Mapped[list["Incident"]] = relationship(back_populates="device")
+
+
+class SensorReading(Base):
+    __tablename__ = "sensor_readings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id"), nullable=False)
+
+    accel_x: Mapped[float] = mapped_column(Float, nullable=False)
+    accel_y: Mapped[float] = mapped_column(Float, nullable=False)
+    accel_z: Mapped[float] = mapped_column(Float, nullable=False)
+
+    gyro_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gyro_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gyro_z: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    gas_level: Mapped[float] = mapped_column(Float, nullable=False)
+
+    latitude: Mapped[float] = mapped_column(Float, nullable=False)
+    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    device: Mapped["Device"] = relationship(back_populates="sensor_readings")
+    incident: Mapped["Incident | None"] = relationship(back_populates="sensor_reading", uselist=False)
+
+    __table_args__ = (
+        Index("ix_sensor_readings_device_id_recorded_at", "device_id", "recorded_at"),
+    )
+
+
+class Incident(Base):
+    __tablename__ = "incidents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id"), nullable=False)
+    sensor_reading_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sensor_readings.id"), nullable=False
+    )
+
+    incident_type: Mapped[str] = mapped_column(String(50), nullable=False)  # accident | gas_leak
+    severity: Mapped[str | None] = mapped_column(String(50), nullable=True)  # minor|moderate|severe
+    severity_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    anomaly_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    latitude: Mapped[float] = mapped_column(Float, nullable=False)
+    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="open", server_default="open")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    device: Mapped["Device"] = relationship(back_populates="incidents")
+    sensor_reading: Mapped["SensorReading"] = relationship(back_populates="incident")
+    alerts: Mapped[list["Alert"]] = relationship(back_populates="incident")
+
+    __table_args__ = (
+        Index("ix_incidents_device_id_created_at", "device_id", "created_at"),
+        Index("ix_incidents_status", "status"),
+    )
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    incident_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("incidents.id"), nullable=False)
+
+    channel: Mapped[str] = mapped_column(String(50), nullable=False)  # mock|email|sms
+    recipient: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+    dispatched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    delivery_status: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="mocked", server_default="mocked"
+    )
+
+    incident: Mapped["Incident"] = relationship(back_populates="alerts")
