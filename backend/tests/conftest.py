@@ -9,7 +9,11 @@ verification checklist). Run `docker compose up -d postgres` first, then
 Unit tests (test_security.py, test_mqtt_validation.py) do not need this
 and will run without a DB.
 """
+import sys
 import asyncio
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 import uuid
 from collections.abc import AsyncGenerator
 
