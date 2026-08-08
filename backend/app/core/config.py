@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # Database
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/smart_accident_db"
-    database_url_sync: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/smart_accident_db"
+    database_url: str = "postgresql+asyncpg://safe_user:safe_password@localhost:5432/safe_accident_db"
+    database_url_sync: str = "postgresql+psycopg2://safe_user:safe_password@localhost:5432/safe_accident_db"
 
     # JWT
     jwt_secret_key: str = "change-me"

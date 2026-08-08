@@ -68,6 +68,12 @@ Created when ML inference flags a reading as accident/anomaly above threshold.
 | device_id | UUID | FK → devices.id, NOT NULL |
 | sensor_reading_id | UUID | FK → sensor_readings.id, NOT NULL |
 | incident_type | VARCHAR(50) | NOT NULL (values: accident, gas_leak) |
+> **Note (added Sprint S3):** Because `incident_type` is single-valued, a sensor
+> reading that trips both the severity model AND the anomaly model simultaneously
+> produces **two separate incident rows**, both referencing the same
+> `sensor_reading_id`. This is intentional — see ARCHITECTURE.md § ML Inference —
+> Design Decisions. `sensor_reading_id` is therefore a non-unique FK on `incidents`
+> by design, not an oversight.
 | severity | VARCHAR(50) | nullable (values: minor, moderate, severe) — set for accident type |
 | severity_score | FLOAT | nullable (raw SVM confidence/score) |
 | anomaly_score | FLOAT | nullable (GMM score, for gas_leak type) |
