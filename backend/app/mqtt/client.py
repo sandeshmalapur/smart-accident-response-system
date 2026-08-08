@@ -3,7 +3,7 @@ MQTT subscriber per MQTT_SPEC.md.
 
 Subscribes to safe/+/telemetry and safe/+/status (QoS 1, wildcard across
 devices). On telemetry: validate schema -> resolve device_code -> persist
-sensor_readings -> run ML stub -> broadcast over /ws/live. Malformed
+sensor_readings -> run real SVM/GMM inference (0-2 incidents per reading) -> broadcast over /ws/live. Malformed
 payloads are logged and dropped, never crash the subscriber.
 
 Device online/offline state (from `status` messages) is NOT in
@@ -123,8 +123,14 @@ class MqttSubscriber:
             reading_out = SensorReadingOut.model_validate(reading).model_dump(mode="json")
             await manager.broadcast_reading(reading_out)
 
-            # ML stub (Sprint S3 replaces this with real SVM/GMM inference).
-            result = run_inference(
+            # Real SVM (severity) + GMM (anomaly) inference (Sprint S3).
+            # Returns a list, not a single result: a reading can trip BOTH
+            # models at once (severe accident + gas leak), and
+            # DATABASE_SCHEMA.md's incidents.incident_type is a single enum
+            # ("accident" XOR "gas_leak"), so that case produces two
+            # separate incident rows sharing this sensor_reading_id rather
+            # than one row trying to represent both.
+            results = run_inference(
                 accel_x=reading.accel_x,
                 accel_y=reading.accel_y,
                 accel_z=reading.accel_z,
@@ -133,7 +139,7 @@ class MqttSubscriber:
                 gyro_z=reading.gyro_z,
                 gas_level=reading.gas_level,
             )
-            if result.is_incident:
+            for result in results:
                 incident = await incident_service.create_incident_from_inference(
                     db,
                     device_id=device.id,
