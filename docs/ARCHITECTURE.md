@@ -49,6 +49,9 @@ sharing the same `sensor_reading_id` (that FK is not unique-constrained).
 The MQTT pipeline (`backend/app/mqtt/client.py`) loops over this list, creating
 zero, one, or two incidents/alerts/broadcasts per reading accordingly.
 
+**Co-occurrence Note:** The GMM anomaly detector is a joint multivariate model over `[gas_level_norm, accel_magnitude]`, not a gas-level-only detector (per PROJECT_CONSTITUTION.md #4). A severe accident (large accel spike) can independently trigger the GMM even with normal gas_level. Consumers of `incidents` (frontend, alerts) MUST check for a sibling incident sharing the same `sensor_reading_id` before presenting a `gas_leak` incident as a standalone gas leak — displaying it as "gas anomaly detected during accident" when a sibling `accident` incident exists.
+
+
 **Any future change to this return shape (e.g. collapsing to a single result, or
 changing to some other multi-result structure) must update all three of:
 `backend/app/ml/inference.py`, `backend/app/mqtt/client.py`, and this doc — in the

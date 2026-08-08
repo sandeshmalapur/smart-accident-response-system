@@ -61,7 +61,7 @@ Response 200: array of most recent reading per device
 ## Incidents
 
 ### GET /incidents
-Query params: `status` (optional), `incident_type` (optional), `device_id` (optional), `from`, `to`, `limit` (default 50)
+Query params: `status` (optional), `incident_type` (optional), `device_id` (optional), `sensor_reading_id` (optional), `from`, `to`, `limit` (default 50)
 Response 200: array of incident objects, newest first
 
 ### GET /incidents/{incident_id}

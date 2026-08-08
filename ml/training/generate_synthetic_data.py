@@ -53,10 +53,15 @@ def _gps_near(base_lat: float = 12.9141, base_lng: float = 74.8560, jitter: floa
     return base_lat + random.uniform(-jitter, jitter), base_lng + random.uniform(-jitter, jitter)
 
 
+GRAVITY_Z = 9.81
+
+
 def _gen_minor(rng: np.random.Generator) -> SyntheticRow:
-    # Normal driving: low, stable accel; gyro near zero; gas normal
+    # Normal driving: stable accel around gravity (z ~= 9.81 m/s^2); gyro near zero; gas normal
     # (MQ2 raw analog reading, mid-low end of the 0-1023 simulated range).
-    ax, ay, az = rng.normal(0, 0.4, 3)
+    ax = float(rng.normal(0.0, 0.3))
+    ay = float(rng.normal(0.0, 0.3))
+    az = float(rng.normal(GRAVITY_Z, 0.3))
     gx, gy, gz = rng.normal(0, 3, 3)
     prev_mag = float(np.linalg.norm([ax, ay, az]) + rng.normal(0, 0.1))
     gas = float(np.clip(rng.normal(200, 60), 0, 1023))
@@ -65,10 +70,10 @@ def _gen_minor(rng: np.random.Generator) -> SyntheticRow:
 
 
 def _gen_moderate(rng: np.random.Generator) -> SyntheticRow:
-    # Moderate impact: a noticeable accel spike on 1-2 axes, mild gyro shift.
-    ax = rng.normal(4.0, 1.2)
-    ay = rng.normal(1.0, 0.8)
-    az = rng.normal(0.5, 0.5)
+    # Moderate impact: a noticeable accel spike on 1-2 axes added to gravity, mild gyro shift.
+    ax = float(rng.normal(10.5, 1.2))
+    ay = float(rng.normal(4.0, 1.0))
+    az = float(rng.normal(GRAVITY_Z, 0.8))
     gx, gy, gz = rng.normal(0, 15, 3)
     prev_mag = float(np.linalg.norm([ax, ay, az]) * rng.uniform(0.3, 0.6))
     gas = float(np.clip(rng.normal(210, 70), 0, 1023))
@@ -78,9 +83,9 @@ def _gen_moderate(rng: np.random.Generator) -> SyntheticRow:
 
 def _gen_severe(rng: np.random.Generator) -> SyntheticRow:
     # Severe impact: large multi-axis accel spike, possible rollover -> large gyro.
-    ax = rng.normal(9.0, 2.0)
-    ay = rng.normal(6.0, 2.0)
-    az = rng.normal(4.0, 1.5)
+    ax = float(rng.normal(19.0, 2.5))
+    ay = float(rng.normal(13.0, 2.0))
+    az = float(rng.normal(GRAVITY_Z, 1.5))
     gx, gy, gz = rng.normal(0, 60, 3)
     prev_mag = float(np.linalg.norm([ax, ay, az]) * rng.uniform(0.05, 0.25))
     gas = float(np.clip(rng.normal(210, 70), 0, 1023))
@@ -140,6 +145,12 @@ def main() -> None:
     print(f"Severity class balance: {counts}")
     print(f"Gas anomaly rows: {n_anomaly} ({n_anomaly / len(rows):.1%})")
 
+    print("\nAccel Magnitude Distributions by Class:")
+    for c in SEVERITY_CLASSES:
+        mags = [np.linalg.norm([r.accel_x, r.accel_y, r.accel_z]) for r in rows if r.severity == c]
+        print(f"  {c:<8}: min={np.min(mags):.2f}, max={np.max(mags):.2f}, mean={np.mean(mags):.2f}")
+
 
 if __name__ == "__main__":
     main()
+

@@ -21,3 +21,5 @@ list) — caught in review before merge, fixed to `for result in results:`.
 these decisions) assumed the old single-result contract and forbade touching
 `client.py`. That prompt is now superseded — do not reuse it. This entry is the
 frozen reference for any future ML-wiring prompt.
+
+**Decided:** GMM anomaly co-occurrence handling — GMM operates jointly on `[gas_level_norm, accel_magnitude]`. Severe acceleration spikes can independently trigger a GMM anomaly. Downstream consumers (frontend dashboard, alerts) must check for a sibling `accident` incident sharing `sensor_reading_id` to present co-occurring gas anomalies as "gas anomaly detected during accident" rather than a standalone gas leak.

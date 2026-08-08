@@ -15,6 +15,7 @@ async def list_incidents(
     status: str | None = None,
     incident_type: str | None = None,
     device_id: uuid.UUID | None = None,
+    sensor_reading_id: uuid.UUID | None = None,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
     limit: int = 50,
@@ -26,6 +27,8 @@ async def list_incidents(
         stmt = stmt.where(Incident.incident_type == incident_type)
     if device_id is not None:
         stmt = stmt.where(Incident.device_id == device_id)
+    if sensor_reading_id is not None:
+        stmt = stmt.where(Incident.sensor_reading_id == sensor_reading_id)
     if from_ts is not None:
         stmt = stmt.where(Incident.created_at >= from_ts)
     if to_ts is not None:
