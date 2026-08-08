@@ -1,18 +1,13 @@
 """
-ML inference STUB.
+ML inference — real SVM (severity classification) and GMM (anomaly/gas-leak detection) models.
 
-TODO(Sprint S3): Replace with real SVM (severity classification) and
-GMM (anomaly/gas-leak detection) model loading + inference, per
-PROJECT_CONSTITUTION.md non-negotiable #4 (SVM and GMM are not
-interchangeable — SVM handles supervised severity, GMM handles
-unsupervised anomaly detection).
-
-For Sprint S2 this always returns a fixed placeholder result and never
-creates an incident, so ingestion can be verified end-to-end without
-real model logic. Sprint S3 wires this into `mqtt/client.py`'s
-`_maybe_flag_incident` hook.
+Loads trained models once via `InferenceService` on module load, wrapped by `run_inference()`
+which adapts the output into 0 to 2 `InferenceResult` objects (one for SVM severity if non-minor,
+one for GMM anomaly if gas leak detected).
 """
 from dataclasses import dataclass
+
+from ._inference_service import InferenceService
 
 
 @dataclass
@@ -24,9 +19,14 @@ class InferenceResult:
     anomaly_score: float | None
 
 
-# Placeholder scores returned by the stub — clearly not derived from any model.
-_PLACEHOLDER_SEVERITY_SCORE = 0.0
-_PLACEHOLDER_ANOMALY_SCORE = 0.0
+_service: InferenceService | None = None
+
+
+def get_inference_service() -> InferenceService:
+    global _service
+    if _service is None:
+        _service = InferenceService()
+    return _service
 
 
 def run_inference(
@@ -38,19 +38,41 @@ def run_inference(
     gyro_y: float | None,
     gyro_z: float | None,
     gas_level: float,
-) -> InferenceResult:
-    """
-    STUB: always returns a fixed, non-incident placeholder result.
+) -> list[InferenceResult]:
+    svc = get_inference_service()
+    results: list[InferenceResult] = []
 
-    Sprint S3 replaces this body with:
-      - SVM inference on accel/gyro features -> severity_score / severity
-      - GMM inference on gas_level (+ features) -> anomaly_score
-      - thresholding to decide is_incident / incident_type
-    """
-    return InferenceResult(
-        is_incident=False,
-        incident_type=None,
-        severity=None,
-        severity_score=_PLACEHOLDER_SEVERITY_SCORE,
-        anomaly_score=_PLACEHOLDER_ANOMALY_SCORE,
+    accel = {"x": accel_x, "y": accel_y, "z": accel_z}
+    gyro = (
+        {"x": gyro_x, "y": gyro_y, "z": gyro_z}
+        if gyro_x is not None and gyro_y is not None and gyro_z is not None
+        else None
     )
+
+    # SVM Severity Prediction
+    sev_res = svc.predict_severity(accel=accel, gyro=gyro)
+    if sev_res["severity"] in ("moderate", "severe"):
+        results.append(
+            InferenceResult(
+                is_incident=True,
+                incident_type="accident",
+                severity=sev_res["severity"],
+                severity_score=sev_res["score"],
+                anomaly_score=None,
+            )
+        )
+
+    # GMM Anomaly Prediction
+    anom_res = svc.predict_anomaly(gas_level=gas_level, accel=accel)
+    if anom_res["is_anomaly"]:
+        results.append(
+            InferenceResult(
+                is_incident=True,
+                incident_type="gas_leak",
+                severity=None,
+                severity_score=None,
+                anomaly_score=anom_res["score"],
+            )
+        )
+
+    return results

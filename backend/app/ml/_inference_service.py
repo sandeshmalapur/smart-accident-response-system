@@ -18,7 +18,10 @@ import numpy as np
 try:
     from training.features import build_gmm_features, build_svm_features
 except ImportError:  # allows running from within backend/app/ml/ once dropped in
-    from features import build_gmm_features, build_svm_features  # type: ignore
+    try:
+        from .features import build_gmm_features, build_svm_features
+    except ImportError:
+        from features import build_gmm_features, build_svm_features  # type: ignore
 
 MODELS_DIR = Path(__file__).resolve().parent / "models"
 SVM_MODEL_PATH = MODELS_DIR / "svm_severity.joblib"
