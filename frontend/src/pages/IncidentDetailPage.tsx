@@ -1,10 +1,13 @@
 import React, { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useIncident, useIncidents, useUpdateIncidentStatus } from '../hooks/useIncidents';
+import { useNearestAmbulances } from '../hooks/useAmbulances';
+import { useDispatches, useCreateDispatch } from '../hooks/useDispatch';
+import { useWelfareChecks } from '../hooks/useWelfareCheck';
 import { annotateIncidentCoOccurrence } from '../lib/incident-utils';
 import { StatusBadge } from '../components/StatusBadge';
 import { IncidentStatus } from '../lib/types';
-import { ArrowLeft, MapPin, Cpu, Clock, Bell, CheckSquare, Activity, Flame } from 'lucide-react';
+import { ArrowLeft, MapPin, CheckSquare, Activity, Bell, Navigation, Truck, Send, ShieldAlert, PhoneCall, CheckCircle2, HeartHandshake } from 'lucide-react';
 
 export const IncidentDetailPage: React.FC = () => {
   const { id = '' } = useParams<{ id: string }>();
@@ -13,6 +16,26 @@ export const IncidentDetailPage: React.FC = () => {
     incident?.sensor_reading_id ? { sensor_reading_id: incident.sensor_reading_id } : undefined
   );
   const updateStatusMutation = useUpdateIncidentStatus();
+
+  // Welfare Checks
+  const { data: welfareChecks = [] } = useWelfareChecks(incident?.id ? { incident_id: incident.id } : undefined);
+  const welfareCheck = welfareChecks.length > 0 ? welfareChecks[0] : null;
+
+  // Ambulances & Dispatches
+  const isAccident = incident?.incident_type === 'accident';
+  const { data: nearestAmbulances = [], isLoading: isLoadingAmbulances } = useNearestAmbulances(
+    isAccident ? incident?.latitude : undefined,
+    isAccident ? incident?.longitude : undefined,
+    'available',
+    3
+  );
+  const { data: dispatches = [] } = useDispatches(incident?.id ? { incident_id: incident.id } : undefined);
+  const createDispatchMutation = useCreateDispatch();
+
+  // Active dispatch for this incident (if any)
+  const activeDispatch = useMemo(() => {
+    return dispatches.length > 0 ? dispatches[0] : null;
+  }, [dispatches]);
 
   // Annotate co-occurrence including sibling incidents sharing the same sensor_reading_id
   const annotatedIncident = useMemo(() => {
@@ -43,6 +66,10 @@ export const IncidentDetailPage: React.FC = () => {
 
   const handleStatusUpdate = (newStatus: IncidentStatus) => {
     updateStatusMutation.mutate({ id: incident.id, status: newStatus });
+  };
+
+  const handleDispatch = (ambulanceId: string) => {
+    createDispatchMutation.mutate({ incidentId: incident.id, ambulanceId });
   };
 
   return (
@@ -101,6 +128,173 @@ export const IncidentDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Welfare Check Panel (Sprint 3) */}
+      {welfareCheck && (
+        <div
+          className={`glass-card rounded-2xl p-5 border ${
+            welfareCheck.status === 'no_response_escalated' || welfareCheck.status === 'responded_help'
+              ? 'border-rose-500/50 bg-rose-950/20 shadow-lg shadow-rose-950/40 animate-pulse'
+              : welfareCheck.status === 'responded_ok'
+              ? 'border-emerald-500/30 bg-emerald-950/10'
+              : 'border-amber-500/30 bg-amber-950/10'
+          } space-y-4`}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2.5">
+              <HeartHandshake className="w-5 h-5 text-cyan-400" />
+              <h3 className="font-bold text-sm text-slate-100">Occupant Welfare Check & Escalation Status</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {welfareCheck.status === 'no_response_escalated' && (
+                <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-mono font-bold uppercase flex items-center gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400" /> ESCALATED — NO RESPONSE
+                </span>
+              )}
+              {welfareCheck.status === 'responded_help' && (
+                <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-mono font-bold uppercase flex items-center gap-1.5">
+                  <PhoneCall className="w-3.5 h-3.5 text-rose-400" /> HELP REQUESTED
+                </span>
+              )}
+              {welfareCheck.status === 'responded_ok' && (
+                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-mono font-bold uppercase flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> RESPONDED OK
+                </span>
+              )}
+              {welfareCheck.status === 'awaiting_response' && (
+                <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono font-bold uppercase flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-amber-400 animate-spin" /> AWAITING RESPONSE
+                </span>
+              )}
+            </div>
+          </div>
+
+          {(welfareCheck.status === 'no_response_escalated' || welfareCheck.status === 'responded_help') && (
+            <div className="p-3.5 rounded-xl bg-rose-900/30 border border-rose-500/40 text-xs font-mono text-rose-200 flex items-start gap-3">
+              <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-rose-100 uppercase tracking-wide block font-bold mb-0.5">Elevated Urgency Alert:</strong>
+                {welfareCheck.status === 'no_response_escalated'
+                  ? 'No occupant response was received within 90 seconds. System has automatically escalated priority.'
+                  : 'Vehicle occupant explicitly tapped "I NEED HELP". Prioritize immediate dispatch.'}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs font-mono text-slate-300 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase">Initiated At</span>
+              <span>{new Date(welfareCheck.initiated_at).toLocaleTimeString()}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase">Occupant Response</span>
+              <span className="font-bold text-cyan-400">{welfareCheck.response ? welfareCheck.response.toUpperCase() : 'NONE'}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase">Status Changed At</span>
+              <span>
+                {welfareCheck.responded_at
+                  ? new Date(welfareCheck.responded_at).toLocaleTimeString()
+                  : welfareCheck.escalated_at
+                  ? new Date(welfareCheck.escalated_at).toLocaleTimeString()
+                  : 'PENDING'}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase">In-Vehicle Tablet</span>
+              <Link
+                to={`/vehicle/${incident.device_id}`}
+                target="_blank"
+                className="text-cyan-400 hover:underline font-bold"
+              >
+                Open Vehicle Display &rarr;
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ambulance Dispatch Panel (Accident Type Only) */}
+      {isAccident && (
+        <div className="glass-card rounded-2xl p-5 border border-emerald-500/30 bg-emerald-950/10 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
+              <Truck className="w-4 h-4 text-emerald-400" />
+              Nearest Available Ambulances & Dispatch Control
+            </h3>
+            <span className="text-xs font-mono text-slate-400">
+              Operator-Triggered Dispatch Only
+            </span>
+          </div>
+
+          {activeDispatch ? (
+            <div className="p-4 rounded-xl bg-slate-900/80 border border-amber-500/40 space-y-3 font-mono text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-amber-400 flex items-center gap-2">
+                  <Truck className="w-4 h-4" /> Active Dispatch Assigned
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase font-bold text-[11px]">
+                  Dispatch Status: {activeDispatch.status}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-slate-300">
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase">Unit Code</span>
+                  <span className="font-bold text-cyan-400">{activeDispatch.ambulance?.ambulance_code || activeDispatch.ambulance_id}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase">Dispatched At</span>
+                  <span>{new Date(activeDispatch.dispatched_at).toLocaleTimeString()}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase">Unit Tablet View</span>
+                  <Link
+                    to={`/ambulance/${activeDispatch.ambulance?.ambulance_code || activeDispatch.ambulance_id}`}
+                    className="text-cyan-400 hover:underline font-bold"
+                  >
+                    Open Ambulance View &rarr;
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ) : isLoadingAmbulances ? (
+            <div className="p-4 text-center font-mono text-xs text-slate-400">Calculating nearest available emergency units...</div>
+          ) : nearestAmbulances.length === 0 ? (
+            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400 text-center">
+              No 'available' ambulances currently registered with location telemetry.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {nearestAmbulances.map((amb, index) => (
+                <div
+                  key={amb.id}
+                  className="glass-card rounded-xl p-4 border border-slate-800 hover:border-emerald-500/40 transition-all flex flex-col justify-between space-y-3"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/30">
+                        #{index + 1} Nearest
+                      </span>
+                      <span className="text-emerald-400 font-bold text-sm">{amb.distance_km.toFixed(2)} km</span>
+                    </div>
+                    <div className="font-bold text-slate-100 text-base">{amb.ambulance_code}</div>
+                    {amb.label && <div className="text-xs text-slate-400 font-mono">{amb.label}</div>}
+                  </div>
+
+                  <button
+                    onClick={() => handleDispatch(amb.id)}
+                    disabled={createDispatchMutation.isPending}
+                    className="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    Dispatch This Ambulance
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Grid: Sensor Reading Details & Alerts List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

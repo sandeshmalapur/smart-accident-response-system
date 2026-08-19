@@ -47,6 +47,32 @@ async def seed() -> None:
         else:
             print(f"Device {TEST_DEVICE_CODE} already exists, skipping")
 
+        from app.db.models import Hospital
+        hosp_result = await db.execute(select(Hospital))
+        if not hosp_result.scalars().first():
+            hospitals = [
+                Hospital(
+                    name="Bangalore Emergency Medical Center",
+                    latitude=12.9716,
+                    longitude=77.5946,
+                    phone="+91 80 2222 3333",
+                ),
+                Hospital(
+                    name="Victoria Hospital Trauma Care",
+                    latitude=12.9620,
+                    longitude=77.5750,
+                    phone="+91 80 2670 1150",
+                ),
+                Hospital(
+                    name="Manipal Emergency Facility",
+                    latitude=12.9580,
+                    longitude=77.6410,
+                    phone="+91 80 2502 4444",
+                ),
+            ]
+            db.add_all(hospitals)
+            print("Created default sample hospitals")
+
         await db.commit()
 
 

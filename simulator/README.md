@@ -85,6 +85,14 @@ MQTT_BROKER_HOST=localhost
 MQTT_BROKER_PORT=1883
 ```
 
+## Manual input tool (temporary testing utility)
+
+```bash
+python manual_input.py
+```
+
+For entering specific raw sensor values by hand to test edge cases. This is NOT how real hardware works; real ESP32 firmware publishes autonomously.
+
 ## Verifying it worked
 
 While the simulator runs, check the backend's `uvicorn` terminal for log

@@ -59,7 +59,22 @@ Index: `(device_id, recorded_at)` for time-series queries.
 
 ---
 
-### 4. `incidents`
+### 4. `hospitals`
+Static hospital registry for auto-suggested nearest hospital emergency response (added Sprint 1).
+
+| Column | Type | Constraints |
+|---|---|---|
+| id | UUID | PK, default gen_random_uuid() |
+| name | VARCHAR(255) | NOT NULL |
+| latitude | FLOAT | NOT NULL |
+| longitude | FLOAT | NOT NULL |
+| phone | VARCHAR(50) | nullable |
+| is_active | BOOLEAN | NOT NULL, default true |
+| created_at | TIMESTAMPTZ | NOT NULL, default now() |
+
+---
+
+### 5. `incidents`
 Created when ML inference flags a reading as accident/anomaly above threshold.
 
 | Column | Type | Constraints |
@@ -67,13 +82,8 @@ Created when ML inference flags a reading as accident/anomaly above threshold.
 | id | UUID | PK, default gen_random_uuid() |
 | device_id | UUID | FK → devices.id, NOT NULL |
 | sensor_reading_id | UUID | FK → sensor_readings.id, NOT NULL |
+| nearest_hospital_id | UUID | FK → hospitals.id, nullable (auto-suggested on accident creation) |
 | incident_type | VARCHAR(50) | NOT NULL (values: accident, gas_leak) |
-> **Note (added Sprint S3):** Because `incident_type` is single-valued, a sensor
-> reading that trips both the severity model AND the anomaly model simultaneously
-> produces **two separate incident rows**, both referencing the same
-> `sensor_reading_id`. This is intentional — see ARCHITECTURE.md § ML Inference —
-> Design Decisions. `sensor_reading_id` is therefore a non-unique FK on `incidents`
-> by design, not an oversight.
 | severity | VARCHAR(50) | nullable (values: minor, moderate, severe) — set for accident type |
 | severity_score | FLOAT | nullable (raw SVM confidence/score) |
 | anomaly_score | FLOAT | nullable (GMM score, for gas_leak type) |
@@ -87,7 +97,7 @@ Index: `(device_id, created_at)`, `(status)`
 
 ---
 
-### 5. `alerts`
+### 6. `alerts`
 Notification dispatch log — mocked in Phase 1, real integration later.
 
 | Column | Type | Constraints |
@@ -100,23 +110,74 @@ Notification dispatch log — mocked in Phase 1, real integration later.
 | dispatched_at | TIMESTAMPTZ | NOT NULL, default now() |
 | delivery_status | VARCHAR(50) | NOT NULL, default 'mocked' (values: mocked, sent, failed) |
 
+### 7. `ambulances`
+Emergency vehicle fleet registry and current location tracking (added Sprint 2).
+
+| Column | Type | Constraints |
+|---|---|---|
+| id | UUID | PK, default gen_random_uuid() |
+| ambulance_code | VARCHAR(100) | UNIQUE, NOT NULL (e.g. "AMB-001") |
+| label | VARCHAR(255) | nullable (e.g. "Rapid Response Unit A") |
+| current_latitude | FLOAT | nullable |
+| current_longitude | FLOAT | nullable |
+| status | VARCHAR(50) | NOT NULL, default 'available' (values: available, dispatched, en_route, at_scene, offline) |
+| last_location_update | TIMESTAMPTZ | nullable |
+| created_at | TIMESTAMPTZ | NOT NULL, default now() |
+
+Index: `(ambulance_code)` UNIQUE
+
+---
+
+### 8. `dispatches`
+Human operator-triggered ambulance dispatch records (added Sprint 2).
+
+| Column | Type | Constraints |
+|---|---|---|
+| id | UUID | PK, default gen_random_uuid() |
+| incident_id | UUID | FK → incidents.id, NOT NULL |
+| ambulance_id | UUID | FK → ambulances.id, NOT NULL |
+| dispatched_by | UUID | FK → users.id, NOT NULL |
+| status | VARCHAR(50) | NOT NULL, default 'dispatched' (values: dispatched, en_route, arrived, completed, cancelled) |
+| dispatched_at | TIMESTAMPTZ | NOT NULL, default now() |
+| updated_at | TIMESTAMPTZ | NOT NULL, default now() |
+
+### 9. `welfare_checks`
+Automated victim check-in and response escalation records for severe accidents (added Sprint 3).
+
+| Column | Type | Constraints |
+|---|---|---|
+| id | UUID | PK, default gen_random_uuid() |
+| incident_id | UUID | FK → incidents.id, NOT NULL |
+| device_id | UUID | FK → devices.id, NOT NULL |
+| status | VARCHAR(50) | NOT NULL, default 'awaiting_response' (values: awaiting_response, responded_ok, responded_help, no_response_escalated) |
+| initiated_at | TIMESTAMPTZ | NOT NULL, default now() |
+| responded_at | TIMESTAMPTZ | nullable |
+| response | VARCHAR(50) | nullable (values: ok, help) |
+| escalated_at | TIMESTAMPTZ | nullable |
+
 ---
 
 ## Relationships
-sers (standalone — dashboard auth only, no FK relations to sensor data)
+users (dashboard auth + dispatches.dispatched_by reference)
 
 devices 1───* sensor_readings
 devices 1───* incidents
+devices 1───* welfare_checks
 sensor_readings 1───1 incidents (an incident references the triggering reading)
+hospitals 1───* incidents (nearest hospital optional relation)
 incidents 1───* alerts
+incidents 1───* dispatches
+incidents 1───* welfare_checks
+ambulances 1───* dispatches
 
 
 ## Migration Plan
 - Alembic manages all schema changes from `backend/alembic/`.
-- Initial migration creates all 5 tables in the order: users → devices → sensor_readings → incidents → alerts (respects FK dependencies).
-- No manual SQL against Supabase — all changes go through Alembic.
+- 0001_initial_schema: users -> devices -> sensor_readings -> incidents -> alerts.
+- 0002_add_hospitals_table: creates `hospitals` table and adds `incidents.nearest_hospital_id` FK.
+- 0003_add_ambulances_dispatches: creates `ambulances` and `dispatches` tables.
+- 0004_add_welfare_checks: creates `welfare_checks` table.
 
 ## Notes
 - UUID primary keys chosen over serial ints for future multi-device/distributed safety.
 - `sensor_readings` is expected to be high-volume — indexed on `(device_id, recorded_at)` for dashboard time-series queries.
-- Severity/anomaly are separate nullable columns on `incidents` rather than two tables, since one incident is either an accident (SVM severity) or a gas leak (GMM anomaly), not both — keeps queries simple for Phase 1. Revisit if incident types grow.

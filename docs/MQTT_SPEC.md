@@ -14,8 +14,9 @@ Pattern: `safe/{device_code}/{stream}`
 |---|---|---|
 | `safe/{device_code}/telemetry` | Publisher → Broker → Backend | Combined sensor reading (accel + gyro + gas + gps) |
 | `safe/{device_code}/status` | Publisher → Broker → Backend | Device online/offline heartbeat |
+| `ambulance/{ambulance_code}/location` | Publisher → Broker → Backend | Emergency ambulance continuous location stream (added Sprint 2) |
 
-`{device_code}` matches `devices.device_code` in the database (e.g. `SIM-001`, `ESP32-004`). Backend resolves this to a `device_id` on ingestion — if the code doesn't exist in the `devices` table, the message is rejected and logged (no auto-creation, to avoid silent junk devices).
+`{device_code}` matches `devices.device_code` in the database. `{ambulance_code}` matches `ambulances.ambulance_code` in the database. Backend resolves these codes on ingestion — if the code doesn't exist in the database, the message is rejected and logged.
 
 ---
 
@@ -48,6 +49,28 @@ Pattern: `safe/{device_code}/{stream}`
 
 ---
 
+## Payload: `ambulance/{ambulance_code}/location`
+
+```json
+{
+  "ambulance_code": "AMB-001",
+  "timestamp": "2026-08-13T23:30:00.000Z",
+  "latitude": 12.9716,
+  "longitude": 77.5946
+}
+```
+
+### Field Rules
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| ambulance_code | string | yes | must match a registered ambulance |
+| timestamp | ISO8601 string / ISO timestamp | yes | measurement timestamp |
+| latitude | float | yes | decimal degrees |
+| longitude | float | yes | decimal degrees |
+
+---
+
 ## Payload: `safe/{device_code}/status`
 
 ```json
@@ -64,15 +87,17 @@ Pattern: `safe/{device_code}/{stream}`
 
 ## Publish Frequency
 - `telemetry`: every 200ms–1s (configurable in simulator; matches realistic accelerometer sampling for accident detection)
+- `ambulance location`: every 2–5s (ambulances do not require high-frequency 200ms telemetry)
 - `status`: on connect, on disconnect, and every 30s heartbeat
 
 ---
 
 ## Backend Subscriber Behavior
-1. Subscribe to `safe/+/telemetry` and `safe/+/status` (wildcard across all devices)
+1. Subscribe to `safe/+/telemetry`, `safe/+/status`, and `ambulance/+/location` (wildcard across devices/ambulances)
 2. On `telemetry` message: validate schema → resolve `device_code` to `device_id` → persist to `sensor_readings` → pass to ML inference → broadcast via WebSocket
-3. On `status` message: update device's last-seen state (in-memory or lightweight table — not yet in DATABASE_SCHEMA.md, add if needed in Phase 6)
-4. Malformed payloads: log and drop, never crash the subscriber
+3. On `ambulance location` message: validate schema → resolve `ambulance_code` in DB → update `current_latitude`, `current_longitude`, and `last_location_update` timestamp. Drop and log unknown `ambulance_code`.
+4. On `status` message: update device's last-seen state (in-memory or lightweight table)
+5. Malformed payloads: log and drop, never crash the subscriber
 
 ---
 

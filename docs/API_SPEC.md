@@ -44,6 +44,44 @@ Response 404: not found
 
 ---
 
+## Hospitals
+
+### GET /hospitals
+Query params: `is_active` (optional bool)
+Response 200: array of hospital objects
+
+### POST /hospitals
+Auth: admin only
+Request:
+```json
+{ "name": "string", "latitude": float, "longitude": float, "phone": "string" }
+```
+Response 201: created hospital object
+
+### GET /hospitals/nearest
+Query params: `lat` (float, required), `lng` (float, required), `limit` (int, default 3)
+Response 200: array of nearest hospital objects, sorted by distance ascending:
+```json
+[
+  {
+    "id": "uuid",
+    "name": "string",
+    "latitude": 12.9716,
+    "longitude": 77.5946,
+    "phone": "+91 80 2345 6789",
+    "is_active": true,
+    "created_at": "2026-08-13T00:00:00Z",
+    "distance_km": 1.24
+  }
+]
+```
+
+### GET /hospitals/{hospital_id}
+Response 200: single hospital object
+Response 404: not found
+
+---
+
 ## Sensor Readings
 
 ### GET /readings
@@ -62,10 +100,10 @@ Response 200: array of most recent reading per device
 
 ### GET /incidents
 Query params: `status` (optional), `incident_type` (optional), `device_id` (optional), `sensor_reading_id` (optional), `from`, `to`, `limit` (default 50)
-Response 200: array of incident objects, newest first
+Response 200: array of incident objects (includes `nearest_hospital_id`), newest first
 
 ### GET /incidents/{incident_id}
-Response 200: single incident object, including nested `sensor_reading` and `alerts` array
+Response 200: single incident object, including nested `sensor_reading`, `nearest_hospital`, and `alerts` array
 Response 404: not found
 
 ### PATCH /incidents/{incident_id}
@@ -75,7 +113,111 @@ Request:
 ```
 Response 200: updated incident object
 
-> Note: incidents are NOT created via REST — they're created internally when ML inference flags a reading. PATCH is for operator triage only.
+> Note: incidents are NOT created via REST — they're created internally when ML inference flags a reading. For accident incidents, `nearest_hospital_id` is automatically populated during incident creation. PATCH is for operator triage only.
+
+---
+
+## Ambulances
+
+### GET /ambulances
+Query params: `status` (optional)
+Response 200: array of ambulance objects
+
+### POST /ambulances
+Auth: admin only
+Request:
+```json
+{ "ambulance_code": "AMB-001", "label": "Rapid Response Unit A" }
+```
+Response 201: created ambulance object
+
+### GET /ambulances/nearest
+Query params: `lat` (float, required), `lng` (float, required), `status` (default "available"), `limit` (default 3)
+Response 200: array of nearest ambulance objects, sorted by distance ascending:
+```json
+[
+  {
+    "id": "uuid",
+    "ambulance_code": "AMB-001",
+    "label": "Rapid Response Unit A",
+    "current_latitude": 12.9716,
+    "current_longitude": 77.5946,
+    "status": "available",
+    "last_location_update": "2026-08-13T23:30:00Z",
+    "created_at": "2026-08-13T00:00:00Z",
+    "distance_km": 0.45
+  }
+]
+```
+
+### GET /ambulances/{ambulance_id_or_code}
+Response 200: single ambulance object
+Response 404: not found
+
+---
+
+## Dispatches
+
+### POST /incidents/{incident_id}/dispatch
+Auth: operator/admin
+Request:
+```json
+{ "ambulance_id": "uuid" }
+```
+Response 201: created dispatch object (sets ambulance status to 'dispatched')
+Response 400: ambulance not available or incident not found
+
+### PATCH /dispatches/{dispatch_id}
+Auth: operator/admin
+Request:
+```json
+{ "status": "en_route|arrived|completed|cancelled" }
+```
+Response 200: updated dispatch object (updates ambulance status accordingly; 'completed' or 'cancelled' resets ambulance status back to 'available')
+
+### GET /dispatches
+Query params: `incident_id` (optional), `ambulance_id` (optional)
+Response 200: array of dispatch objects, newest first
+
+### GET /dispatches/{dispatch_id}
+Response 200: single dispatch object
+
+---
+
+## Welfare Checks
+
+### GET /welfare-checks/config/messages
+Auth: none required
+Response 200:
+```json
+{
+  "prompt": "We detected a possible accident. Are you able to respond?",
+  "safety_guidance": "Stay as still as possible. Do not attempt to move unless there is immediate danger (fire, traffic). Help is on the way.",
+  "escalation_notice": "No response received. Emergency responders have been notified with elevated priority."
+}
+```
+
+### POST /welfare-checks/{id}/respond
+Auth: none required (occupant in-vehicle display)
+Request:
+```json
+{ "response": "ok|help" }
+```
+Response 200: updated welfare_check object
+Response 400: invalid response value or welfare check no longer awaiting response
+
+### GET /welfare-checks/device/{device_code}
+Auth: none required (in-vehicle display polling)
+Response 200: active welfare check object for device
+
+### GET /welfare-checks/{id}
+Auth: none required
+Response 200: single welfare check object with static message strings attached
+
+### GET /welfare-checks
+Auth: operator/admin
+Query params: `incident_id` (optional), `device_id` (optional), `status` (optional)
+Response 200: array of welfare check objects, newest first
 
 ---
 
@@ -96,6 +238,7 @@ Server → Client messages:
 { "type": "reading", "data": { ...sensor_reading } }
 { "type": "incident", "data": { ...incident } }
 { "type": "alert", "data": { ...alert } }
+{ "type": "welfare_check", "data": { ...welfare_check } }
 ```
 No client → server messages expected (broadcast-only channel in Phase 1).
 
@@ -116,7 +259,7 @@ No client → server messages expected (broadcast-only channel in Phase 1).
 - 422 — malformed request body
 
 ## Pagination Convention
-All list endpoints: `limit` query param, results ordered newest-first. Cursor/offset pagination deferred — not needed at Phase 1 data volumes.
+All list endpoints: `limit` query param, results ordered newest-first.
 
 ## Versioning
 All endpoints prefixed `/api/v1/`. Breaking changes require a new version prefix (`/api/v2/`), never a silent change to v1.

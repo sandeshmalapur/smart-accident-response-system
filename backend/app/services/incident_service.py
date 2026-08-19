@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.db.models import Incident
 from app.ml.inference import InferenceResult
 from app.schemas.incident import IncidentUpdate
+from app.services import hospital_service
 
 
 async def list_incidents(
@@ -42,7 +43,11 @@ async def get_incident_detail(db: AsyncSession, incident_id: uuid.UUID) -> Incid
     stmt = (
         select(Incident)
         .where(Incident.id == incident_id)
-        .options(selectinload(Incident.sensor_reading), selectinload(Incident.alerts))
+        .options(
+            selectinload(Incident.sensor_reading),
+            selectinload(Incident.nearest_hospital),
+            selectinload(Incident.alerts),
+        )
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
@@ -72,13 +77,19 @@ async def create_incident_from_inference(
     result: InferenceResult,
 ) -> Incident:
     """
-    Persists an incident row when ML inference (app/ml/inference.py) flags
-    a reading. Not exposed via REST — incidents are internal-only per
-    API_SPEC.md ("incidents are NOT created via REST").
+    Persists an incident row when ML inference flags a reading.
+    For accident incidents (not gas_leak), automatically computes and sets nearest_hospital_id.
     """
+    nearest_hospital_id = None
+    if result.incident_type == "accident":
+        nearest = await hospital_service.get_nearest_hospitals(db, lat=latitude, lng=longitude, limit=1)
+        if nearest:
+            nearest_hospital_id = nearest[0]["id"]
+
     incident = Incident(
         device_id=device_id,
         sensor_reading_id=sensor_reading_id,
+        nearest_hospital_id=nearest_hospital_id,
         incident_type=result.incident_type,
         severity=result.severity,
         severity_score=result.severity_score,
@@ -89,4 +100,17 @@ async def create_incident_from_inference(
     db.add(incident)
     await db.commit()
     await db.refresh(incident)
+
+    # Sprint 3: Auto-create welfare check for severe accidents ONLY
+    if incident.incident_type == "accident" and incident.severity == "severe":
+        from app.services import welfare_check_service
+        from app.ws.manager import manager
+        from app.schemas.welfare_check import WelfareCheckOut
+
+        welfare_check = await welfare_check_service.create_welfare_check(
+            db, incident_id=incident.id, device_id=device_id
+        )
+        wc_out = WelfareCheckOut.model_validate(welfare_check).model_dump(mode="json")
+        await manager.broadcast_welfare_check(wc_out)
+
     return incident

@@ -10,6 +10,10 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { IncidentsPage } from './pages/IncidentsPage';
 import { IncidentDetailPage } from './pages/IncidentDetailPage';
+import { HospitalsPage } from './pages/HospitalsPage';
+import { AmbulancesPage } from './pages/AmbulancesPage';
+import { AmbulanceView } from './pages/AmbulanceView';
+import { VehicleCheckInPage } from './pages/VehicleCheckInPage';
 import { DevicesPage } from './pages/DevicesPage';
 
 const queryClient = new QueryClient({
@@ -35,6 +39,8 @@ const MainLayout: React.FC = () => {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/incidents" element={<IncidentsPage />} />
             <Route path="/incidents/:id" element={<IncidentDetailPage />} />
+            <Route path="/hospitals" element={<HospitalsPage />} />
+            <Route path="/ambulances" element={<AmbulancesPage />} />
             <Route path="/devices" element={<DevicesPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
@@ -51,7 +57,9 @@ export const App: React.FC = () => {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/vehicle/:deviceCode" element={<VehicleCheckInPage />} />
             <Route element={<ProtectedRoute />}>
+              <Route path="/ambulance/:ambulanceCode" element={<AmbulanceView />} />
               <Route path="/*" element={<MainLayout />} />
             </Route>
           </Routes>

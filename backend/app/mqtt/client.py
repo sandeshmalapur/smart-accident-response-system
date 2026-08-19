@@ -16,6 +16,7 @@ sprint report — revisit if the dashboard needs this persisted.
 import asyncio
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 
 from paho.mqtt import client as mqtt
@@ -31,12 +32,13 @@ logger = logging.getLogger("app.mqtt")
 
 TELEMETRY_TOPIC_FILTER = "safe/+/telemetry"
 STATUS_TOPIC_FILTER = "safe/+/status"
+AMBULANCE_LOCATION_TOPIC_FILTER = "ambulance/+/location"
 
 
 class MqttSubscriber:
     def __init__(self) -> None:
         self._client = mqtt.Client(
-            client_id=settings.mqtt_client_id,
+            client_id=f"{settings.mqtt_client_id}-{uuid.uuid4().hex[:6]}",
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
         )
         self._client.on_connect = self._on_connect
@@ -72,6 +74,7 @@ class MqttSubscriber:
         logger.info("MQTT connected to %s:%s", settings.mqtt_broker_host, settings.mqtt_broker_port)
         client.subscribe(TELEMETRY_TOPIC_FILTER, qos=1)
         client.subscribe(STATUS_TOPIC_FILTER, qos=1)
+        client.subscribe(AMBULANCE_LOCATION_TOPIC_FILTER, qos=1)
 
     def _on_disconnect(self, client: mqtt.Client, userdata, flags, reason_code, properties=None) -> None:
         logger.warning("MQTT disconnected: %s", reason_code)
@@ -96,11 +99,40 @@ class MqttSubscriber:
                 await self._handle_telemetry(data)
             elif topic.endswith("/status"):
                 await self._handle_status(data)
+            elif topic.startswith("ambulance/") and topic.endswith("/location"):
+                await self._handle_ambulance_location(data)
             else:
                 logger.warning("Message on unrecognized topic %s ignored", topic)
         except Exception:
             # Never let a bad message crash the subscriber.
             logger.exception("Error handling message on topic %s", topic)
+
+    async def _handle_ambulance_location(self, data: dict) -> None:
+        from app.schemas.ambulance import MqttAmbulanceLocationPayload
+        from app.services import ambulance_service
+
+        try:
+            payload = MqttAmbulanceLocationPayload.model_validate(data)
+        except Exception as exc:
+            logger.warning("Dropped malformed ambulance location payload: %s", exc)
+            return
+
+        async with AsyncSessionLocal() as db:
+            ambulance = await ambulance_service.get_ambulance_by_code(db, payload.ambulance_code)
+            if ambulance is None:
+                logger.warning("Dropped location for unknown ambulance_code=%s", payload.ambulance_code)
+                return
+
+            await ambulance_service.update_ambulance_location(
+                db, ambulance, lat=payload.latitude, lng=payload.longitude
+            )
+            logger.info(
+                "Updated location for ambulance_code=%s lat=%.5f lng=%.5f",
+                payload.ambulance_code,
+                payload.latitude,
+                payload.longitude,
+            )
+
 
     async def _handle_telemetry(self, data: dict) -> None:
         try:

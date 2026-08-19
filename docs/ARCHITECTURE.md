@@ -90,5 +90,13 @@ Stores: raw sensor readings, incidents, severity scores, alert logs, user accoun
 5. WebSocket broadcasts updated state to all connected dashboards
 6. Dashboard renders live + historical views via WS + REST respectively
 
-## Key Constraint
-Swapping the Simulator for ESP32 must require **zero backend code changes** — only the publisher changes, MQTT schema stays identical.
+## Key Constraints & Safety Rules
+
+1. **Swapping the Simulator for ESP32**: Must require **zero backend code changes** — only the publisher changes, MQTT schema stays identical.
+2. **Victim Welfare Check & Static Safety Guidance (Permanent Architectural Rule)**:
+   This system **NEVER** generates dynamic medical advice or AI-composed text shown to vehicle occupants. All strings rendered on the in-vehicle welfare check screen (`/vehicle/:deviceCode`) are strictly fixed, pre-reviewed static constants configured once in `backend/app/core/welfare_messages.py` (`WELFARE_CHECK_PROMPT`, `SAFETY_GUIDANCE`, `ESCALATION_NOTICE`). The system's sole functions during post-crash welfare check are:
+   - Prompting the occupant if they are able to respond.
+   - Presenting binary touch buttons (`"I'M OK"` / `"I NEED HELP"`).
+   - Displaying generic, universally safe static guidance ("stay still, help is on the way").
+   - Automatically escalating urgency to the operator dashboard if no response is received within 90 seconds.
+   No free-text input, open-ended chat, or dynamic AI generation is permitted anywhere in this pipeline.

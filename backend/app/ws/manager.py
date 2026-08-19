@@ -54,6 +54,9 @@ class ConnectionManager:
     async def broadcast_alert(self, alert: dict[str, Any]) -> None:
         await self.broadcast("alert", alert)
 
+    async def broadcast_welfare_check(self, welfare_check: dict[str, Any]) -> None:
+        await self.broadcast("welfare_check", welfare_check)
+
 
 # Single process-wide instance shared by the MQTT client, REST routers, and the WS route.
 manager = ConnectionManager()

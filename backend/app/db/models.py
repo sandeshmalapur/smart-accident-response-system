@@ -2,7 +2,7 @@
 SQLAlchemy models — must match DATABASE_SCHEMA.md exactly.
 
 Table order (respects FK dependencies, matches migration plan):
-users -> devices -> sensor_readings -> incidents -> alerts
+users -> devices -> sensor_readings -> hospitals -> incidents -> alerts
 """
 import uuid
 from datetime import datetime
@@ -78,6 +78,18 @@ class SensorReading(Base):
     )
 
 
+class Hospital(Base):
+    __tablename__ = "hospitals"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    latitude: Mapped[float] = mapped_column(Float, nullable=False)
+    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class Incident(Base):
     __tablename__ = "incidents"
 
@@ -85,6 +97,9 @@ class Incident(Base):
     device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id"), nullable=False)
     sensor_reading_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("sensor_readings.id"), nullable=False
+    )
+    nearest_hospital_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("hospitals.id"), nullable=True
     )
 
     incident_type: Mapped[str] = mapped_column(String(50), nullable=False)  # accident | gas_leak
@@ -101,6 +116,7 @@ class Incident(Base):
 
     device: Mapped["Device"] = relationship(back_populates="incidents")
     sensor_reading: Mapped["SensorReading"] = relationship(back_populates="incident")
+    nearest_hospital: Mapped["Hospital | None"] = relationship()
     alerts: Mapped[list["Alert"]] = relationship(back_populates="incident")
 
     __table_args__ = (
@@ -127,3 +143,62 @@ class Alert(Base):
     )
 
     incident: Mapped["Incident"] = relationship(back_populates="alerts")
+
+
+class Ambulance(Base):
+    __tablename__ = "ambulances"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ambulance_code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    current_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="available", server_default="available")
+    last_location_update: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    dispatches: Mapped[list["Dispatch"]] = relationship(back_populates="ambulance")
+
+
+class Dispatch(Base):
+    __tablename__ = "dispatches"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    incident_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("incidents.id"), nullable=False)
+    ambulance_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("ambulances.id"), nullable=False)
+    dispatched_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="dispatched", server_default="dispatched")
+    dispatched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    incident: Mapped["Incident"] = relationship()
+    ambulance: Mapped["Ambulance"] = relationship(back_populates="dispatches")
+    user: Mapped["User"] = relationship()
+
+
+class WelfareCheck(Base):
+    __tablename__ = "welfare_checks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    incident_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("incidents.id"), nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id"), nullable=False)
+
+    status: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="awaiting_response", server_default="awaiting_response"
+    )
+    initiated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    response: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    incident: Mapped["Incident"] = relationship()
+    device: Mapped["Device"] = relationship()
+
+
