@@ -6,6 +6,7 @@ import { Navigation, Radio, Building2, AlertTriangle, Cpu, Truck } from 'lucide-
 import { SensorReading, Incident } from '../lib/types';
 import { useHospitals } from '../hooks/useHospitals';
 import { useAmbulances } from '../hooks/useAmbulances';
+import { useAgencyUnits } from '../hooks/useAgencyUnits';
 
 // Helper function to compute Haversine distance in JS for popup display
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -18,6 +19,42 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
+
+const policeIcon = L.divIcon({
+  className: 'custom-leaflet-marker',
+  html: `<div style="
+    width: 32px;
+    height: 32px;
+    background: #1e3a8a;
+    border: 2px solid #3b82f6;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.6);
+  ">🚔</div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+});
+
+const fireIcon = L.divIcon({
+  className: 'custom-leaflet-marker',
+  html: `<div style="
+    width: 32px;
+    height: 32px;
+    background: #7f1d1d;
+    border: 2px solid #ef4444;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.6);
+  ">🚒</div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+});
 
 // Leaflet DivIcons with HTML/SVG strings for reliable Vite rendering
 const deviceIcon = L.divIcon({
@@ -141,6 +178,7 @@ interface MapViewProps {
 export const MapView: React.FC<MapViewProps> = ({ readings, incidents }) => {
   const { data: hospitals = [] } = useHospitals();
   const { data: ambulances = [] } = useAmbulances();
+  const { data: agencyUnits = [] } = useAgencyUnits();
 
   // Compute map center from readings, incidents, hospitals, ambulances, or fallback (Bangalore coordinates)
   const mapCenter = useMemo<[number, number]>(() => {
@@ -247,6 +285,36 @@ export const MapView: React.FC<MapViewProps> = ({ readings, incidents }) => {
                 </Popup>
               </Marker>
             ))}
+
+          {/* Agency Unit Markers (Police & Fire) */}
+          {agencyUnits
+            .filter((unit) => unit.current_latitude !== null && unit.current_latitude !== undefined && unit.current_longitude !== null && unit.current_longitude !== undefined)
+            .map((unit) => {
+              const isPolice = unit.agency_type === 'police';
+              return (
+                <Marker
+                  key={unit.id}
+                  position={[unit.current_latitude!, unit.current_longitude!]}
+                  icon={isPolice ? policeIcon : fireIcon}
+                >
+                  <Popup>
+                    <div className="p-2 font-mono text-xs space-y-1 text-slate-900">
+                      <div className={`font-bold flex items-center gap-1 ${isPolice ? 'text-blue-700' : 'text-red-700'}`}>
+                        {isPolice ? '🚔' : '🚒'} {unit.unit_code} ({unit.agency_type.toUpperCase()})
+                      </div>
+                      <div>
+                        Status: <span className="font-bold uppercase text-slate-800">{unit.status}</span>
+                      </div>
+                      {unit.label && <div>Label: {unit.label}</div>}
+                      {unit.contact_phone && <div>Phone: {unit.contact_phone}</div>}
+                      <div>
+                        Coordinates: {unit.current_latitude!.toFixed(4)}°, {unit.current_longitude!.toFixed(4)}°
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
 
           {/* Hospital Markers */}
           {hospitals.map((hosp) => (

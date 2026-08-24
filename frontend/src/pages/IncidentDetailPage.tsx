@@ -6,6 +6,8 @@ import { useDispatches, useCreateDispatch } from '../hooks/useDispatch';
 import { useWelfareChecks } from '../hooks/useWelfareCheck';
 import { annotateIncidentCoOccurrence } from '../lib/incident-utils';
 import { StatusBadge } from '../components/StatusBadge';
+import { ResponseStatusBadge } from '../components/ResponseStatusBadge';
+import { AgencyDispatchPanel } from '../components/AgencyDispatchPanel';
 import { IncidentStatus } from '../lib/types';
 import { ArrowLeft, MapPin, CheckSquare, Activity, Bell, Navigation, Truck, Send, ShieldAlert, PhoneCall, CheckCircle2, HeartHandshake } from 'lucide-react';
 
@@ -100,6 +102,7 @@ export const IncidentDetailPage: React.FC = () => {
             <div className="flex items-center gap-2 flex-wrap">
               <StatusBadge variant={annotatedIncident.badgeVariant} size="lg" />
               <StatusBadge status={annotatedIncident.status} size="lg" />
+              <ResponseStatusBadge responseStatus={incident.response_status} />
             </div>
             <h1 className="text-2xl font-extrabold text-slate-100">{annotatedIncident.displayTitle}</h1>
           </div>
@@ -295,6 +298,9 @@ export const IncidentDetailPage: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Multi-Agency (Police & Fire) Dispatch Panel */}
+      <AgencyDispatchPanel incident={incident} />
 
       {/* Grid: Sensor Reading Details & Alerts List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

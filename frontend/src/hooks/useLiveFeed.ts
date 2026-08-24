@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { SensorReading, Incident, Alert, WSMessage } from '../lib/types';
 
 interface LiveFeedState {
@@ -18,6 +19,7 @@ export function useLiveFeed(token: string | null) {
     liveAlerts: [],
   });
 
+  const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -62,6 +64,14 @@ export function useLiveFeed(token: string | null) {
             ...prev,
             liveAlerts: [alert, ...prev.liveAlerts.filter((a) => a.id !== alert.id).slice(0, 49)],
           }));
+        } else if (msg.type === 'agency_dispatch') {
+          queryClient.invalidateQueries({ queryKey: ['agency-dispatches'] });
+          queryClient.invalidateQueries({ queryKey: ['agency-units'] });
+          queryClient.invalidateQueries({ queryKey: ['incidents'] });
+        } else if (msg.type === 'incident_response_status') {
+          queryClient.invalidateQueries({ queryKey: ['incidents'] });
+          queryClient.invalidateQueries({ queryKey: ['agency-dispatches'] });
+          queryClient.invalidateQueries({ queryKey: ['dispatches'] });
         }
       } catch (err) {
         console.error('[WS] Failed to parse WebSocket message:', err);
@@ -85,7 +95,7 @@ export function useLiveFeed(token: string | null) {
     };
 
     wsRef.current = socket;
-  }, [token]);
+  }, [token, queryClient]);
 
   useEffect(() => {
     connect();

@@ -23,6 +23,7 @@ class IncidentOut(BaseModel):
     status: str
     created_at: datetime
     resolved_at: datetime | None
+    response_status: dict | None = None
 
     model_config = {"from_attributes": True}
 

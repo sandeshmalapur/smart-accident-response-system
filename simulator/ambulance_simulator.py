@@ -16,6 +16,8 @@ import random
 import signal
 import sys
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from types import FrameType
 
@@ -43,6 +45,11 @@ def parse_args() -> argparse.Namespace:
         help="Seconds to run before stopping automatically. Omit to run until Ctrl+C.",
     )
     parser.add_argument(
+        "--backend-url",
+        default=os.getenv("BACKEND_URL", "http://localhost:8000"),
+        help="Backend API base URL (default: http://localhost:8000)",
+    )
+    parser.add_argument(
         "--broker-host",
         default=os.getenv("MQTT_BROKER_HOST", "localhost"),
         help="MQTT broker host (default: localhost)",
@@ -54,6 +61,27 @@ def parse_args() -> argparse.Namespace:
         help="MQTT broker port (default: 1883)",
     )
     return parser.parse_args()
+
+
+def fetch_active_dispatch(backend_url: str, ambulance_code: str) -> dict | None:
+    url = f"{backend_url.rstrip('/')}/api/v1/ambulances/{ambulance_code}/active-dispatch"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "AmbulanceSimulator/1.0"})
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
+            if resp.status == 200:
+                content = resp.read()
+                if not content:
+                    return None
+                data = json.loads(content.decode("utf-8"))
+                if data and isinstance(data, dict) and data.get("incident"):
+                    return data
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        logger.debug("HTTP error fetching active dispatch: %s", exc)
+    except Exception as exc:
+        logger.debug("Error fetching active dispatch: %s", exc)
+    return None
 
 
 def build_location_payload(ambulance_code: str, lat: float, lng: float) -> dict:
@@ -140,19 +168,55 @@ def main() -> int:
                 logger.info("Duration elapsed (%ss), stopping.", args.duration)
                 break
 
+            active_dispatch = fetch_active_dispatch(args.backend_url, args.ambulance_code)
+
             payload = build_location_payload(args.ambulance_code, current_lat, current_lng)
             client.publish(topic, json.dumps(payload), qos=1, retain=False)
-            logger.info(
-                "tick=%d published location lat=%.5f lng=%.5f",
-                tick,
-                current_lat,
-                current_lng,
-            )
 
-            # Small realistic random walk step (simulating movement/patrol)
-            current_lat += random.uniform(-0.00015, 0.00015)
-            current_lng += random.uniform(-0.00015, 0.00015)
+            if active_dispatch and active_dispatch.get("incident"):
+                incident = active_dispatch["incident"]
+                target_lat = incident["latitude"]
+                target_lng = incident["longitude"]
+
+                d_lat = target_lat - current_lat
+                d_lng = target_lng - current_lng
+                dist_deg = (d_lat**2 + d_lng**2) ** 0.5
+
+                # Threshold distance ~50m (approx 0.00045 degrees)
+                if dist_deg <= 0.00045:
+                    logger.info(
+                        "tick=%d [DISPATCHED] Arrived near incident target=(%.5f, %.5f) cur=(%.5f, %.5f) dist=%.6f deg. Holding position.",
+                        tick,
+                        target_lat,
+                        target_lng,
+                        current_lat,
+                        current_lng,
+                        dist_deg,
+                    )
+                else:
+                    current_lat += d_lat * 0.18
+                    current_lng += d_lng * 0.18
+                    logger.info(
+                        "tick=%d [DISPATCHED] Moving toward incident target=(%.5f, %.5f) cur=(%.5f, %.5f) dist=%.6f deg",
+                        tick,
+                        target_lat,
+                        target_lng,
+                        current_lat,
+                        current_lng,
+                        dist_deg,
+                    )
+            else:
+                logger.info(
+                    "tick=%d [PATROLLING] published location lat=%.5f lng=%.5f",
+                    tick,
+                    current_lat,
+                    current_lng,
+                )
+                current_lat += random.uniform(-0.00015, 0.00015)
+                current_lng += random.uniform(-0.00015, 0.00015)
+
             tick += 1
+
 
             interval = random.uniform(MIN_PUBLISH_INTERVAL_SECONDS, MAX_PUBLISH_INTERVAL_SECONDS)
             slept = 0.0

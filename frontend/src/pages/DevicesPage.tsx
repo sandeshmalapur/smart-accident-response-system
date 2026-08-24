@@ -11,6 +11,9 @@ export const DevicesPage: React.FC = () => {
   const [deviceCode, setDeviceCode] = useState('');
   const [deviceType, setDeviceType] = useState<'simulator' | 'esp32'>('simulator');
   const [label, setLabel] = useState('');
+  const [ownerName, setOwnerName] = useState('');
+  const [emergencyContactName, setEmergencyContactName] = useState('');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -30,9 +33,15 @@ export const DevicesPage: React.FC = () => {
         device_code: deviceCode.trim(),
         device_type: deviceType,
         label: label.trim() || undefined,
+        owner_name: ownerName.trim() || undefined,
+        emergency_contact_name: emergencyContactName.trim() || undefined,
+        emergency_contact_phone: emergencyContactPhone.trim() || undefined,
       });
       setDeviceCode('');
       setLabel('');
+      setOwnerName('');
+      setEmergencyContactName('');
+      setEmergencyContactPhone('');
       setShowModal(false);
     } catch (err: any) {
       setFormError(err.response?.data?.detail || 'Failed to register device');
@@ -74,7 +83,8 @@ export const DevicesPage: React.FC = () => {
                 <tr>
                   <th className="px-4 py-3">Device Code</th>
                   <th className="px-4 py-3">Hardware Type</th>
-                  <th className="px-4 py-3">Label / Description</th>
+                  <th className="px-4 py-3">Owner / Vehicle Label</th>
+                  <th className="px-4 py-3">Emergency Contact</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Registration Date</th>
                   <th className="px-4 py-3 text-right">System UUID</th>
@@ -92,7 +102,20 @@ export const DevicesPage: React.FC = () => {
                         {dev.device_type}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-300">{dev.label || 'Unlabeled Node'}</td>
+                    <td className="px-4 py-3 text-slate-300">
+                      <div>{dev.label || 'Unlabeled Node'}</div>
+                      {dev.owner_name && <div className="text-[10px] text-slate-500">Owner: {dev.owner_name}</div>}
+                    </td>
+                    <td className="px-4 py-3 text-slate-400">
+                      {dev.emergency_contact_phone ? (
+                        <div>
+                          <div className="text-slate-200">{dev.emergency_contact_name || 'Contact'}</div>
+                          <div className="text-[10px] text-cyan-400">{dev.emergency_contact_phone}</div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-600">None</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       {dev.is_active ? (
                         <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
@@ -117,7 +140,7 @@ export const DevicesPage: React.FC = () => {
       {/* Admin Register Device Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+          <div className="w-full max-w-md glass-card rounded-2xl p-6 border border-slate-800 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-cyan-400" />
@@ -170,6 +193,40 @@ export const DevicesPage: React.FC = () => {
                 />
               </div>
 
+              <div className="space-y-1 border-t border-slate-800 pt-3">
+                <label className="text-slate-400 uppercase">Vehicle Owner Name (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Jane Doe"
+                  value={ownerName}
+                  onChange={(e) => setOwnerName(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-400 uppercase">Emergency Contact Name (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. John Doe (Spouse)"
+                  value={emergencyContactName}
+                  onChange={(e) => setEmergencyContactName(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-400 uppercase">Emergency Contact Phone (Optional)</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. +1234567890"
+                  value={emergencyContactPhone}
+                  onChange={(e) => setEmergencyContactPhone(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-cyan-500"
+                />
+                <p className="text-[10px] text-slate-500 font-sans">Used for Twilio SMS tracking alert on severe accidents</p>
+              </div>
+
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
@@ -193,3 +250,6 @@ export const DevicesPage: React.FC = () => {
     </div>
   );
 };
+
+export default DevicesPage;
+

@@ -6,12 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, require_admin
 from app.db.session import get_db
 from app.schemas.ambulance import AmbulanceCreate, AmbulanceNearestOut, AmbulanceOut
-from app.services import ambulance_service
+from app.schemas.dispatch import DispatchOut
+from app.services import ambulance_service, dispatch_service
 
-router = APIRouter(prefix="/ambulances", tags=["ambulances"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/ambulances", tags=["ambulances"])
 
 
-@router.get("", response_model=list[AmbulanceOut])
+@router.get("", response_model=list[AmbulanceOut], dependencies=[Depends(get_current_user)])
 async def list_ambulances(
     status_: str | None = None, db: AsyncSession = Depends(get_db)
 ) -> list[AmbulanceOut]:
@@ -36,7 +37,7 @@ async def create_ambulance(data: AmbulanceCreate, db: AsyncSession = Depends(get
     return AmbulanceOut.model_validate(ambulance)
 
 
-@router.get("/nearest", response_model=list[AmbulanceNearestOut])
+@router.get("/nearest", response_model=list[AmbulanceNearestOut], dependencies=[Depends(get_current_user)])
 async def get_nearest_ambulances(
     lat: float,
     lng: float,
@@ -48,7 +49,26 @@ async def get_nearest_ambulances(
     return [AmbulanceNearestOut(**item) for item in nearest]
 
 
-@router.get("/{ambulance_identifier}", response_model=AmbulanceOut)
+@router.get("/{ambulance_identifier}/active-dispatch", response_model=DispatchOut | None)
+async def get_ambulance_active_dispatch(
+    ambulance_identifier: str, db: AsyncSession = Depends(get_db)
+) -> DispatchOut | None:
+    try:
+        amb_id = uuid.UUID(ambulance_identifier)
+        ambulance = await ambulance_service.get_ambulance_by_id(db, amb_id)
+    except ValueError:
+        ambulance = await ambulance_service.get_ambulance_by_code(db, ambulance_identifier)
+
+    if ambulance is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ambulance not found")
+
+    dispatch = await dispatch_service.get_active_dispatch_for_ambulance(db, ambulance.id)
+    if dispatch is None:
+        return None
+    return DispatchOut.model_validate(dispatch)
+
+
+@router.get("/{ambulance_identifier}", response_model=AmbulanceOut, dependencies=[Depends(get_current_user)])
 async def get_ambulance(ambulance_identifier: str, db: AsyncSession = Depends(get_db)) -> AmbulanceOut:
     # Try UUID parse first, fallback to ambulance_code lookup
     try:
@@ -60,3 +80,4 @@ async def get_ambulance(ambulance_identifier: str, db: AsyncSession = Depends(ge
     if ambulance is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ambulance not found")
     return AmbulanceOut.model_validate(ambulance)
+

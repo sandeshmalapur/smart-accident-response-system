@@ -18,6 +18,14 @@ import {
   WelfareCheckResponse,
   WelfareCheckStatus,
   WelfareMessages,
+  TrackingDetail,
+  AgencyType,
+  AgencyUnitStatus,
+  AgencyDispatchStatus,
+  AgencyUnit,
+  AgencyUnitNearest,
+  AgencyDispatch,
+  IncidentResponseStatus,
 } from './types';
 
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) || '/api/v1';
@@ -57,8 +65,21 @@ export const api = {
     return res.data;
   },
 
-  createDevice: async (data: { device_code: string; device_type: 'simulator' | 'esp32'; label?: string }): Promise<Device> => {
+  createDevice: async (data: {
+    device_code: string;
+    device_type: 'simulator' | 'esp32';
+    label?: string;
+    owner_name?: string;
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
+  }): Promise<Device> => {
     const res = await apiClient.post<Device>('/devices', data);
+    return res.data;
+  },
+
+  // Public Tracking
+  getTrackingInfo: async (token: string): Promise<TrackingDetail> => {
+    const res = await apiClient.get<TrackingDetail>(`/track/${token}`);
     return res.data;
   },
 
@@ -134,6 +155,67 @@ export const api = {
 
   getDispatch: async (dispatchId: string): Promise<Dispatch> => {
     const res = await apiClient.get<Dispatch>(`/dispatches/${dispatchId}`);
+    return res.data;
+  },
+
+  // Agency Units & Agency Dispatches
+  getAgencyUnits: async (params?: { agency_type?: AgencyType; status?: AgencyUnitStatus }): Promise<AgencyUnit[]> => {
+    const res = await apiClient.get<AgencyUnit[]>('/agency-units', { params: { agency_type: params?.agency_type, status: params?.status } });
+    return res.data;
+  },
+
+  createAgencyUnit: async (data: {
+    agency_type: AgencyType;
+    unit_code: string;
+    label?: string;
+    contact_phone?: string;
+    current_latitude?: number;
+    current_longitude?: number;
+  }): Promise<AgencyUnit> => {
+    const res = await apiClient.post<AgencyUnit>('/agency-units', data);
+    return res.data;
+  },
+
+  getNearestAgencyUnits: async (
+    agencyType: AgencyType,
+    lat: number,
+    lng: number,
+    status: AgencyUnitStatus = 'available',
+    limit: number = 3
+  ): Promise<AgencyUnitNearest[]> => {
+    const res = await apiClient.get<AgencyUnitNearest[]>('/agency-units/nearest', {
+      params: { agency_type: agencyType, lat, lng, status, limit },
+    });
+    return res.data;
+  },
+
+  getAgencyUnit: async (identifier: string): Promise<AgencyUnit> => {
+    const res = await apiClient.get<AgencyUnit>(`/agency-units/${identifier}`);
+    return res.data;
+  },
+
+  createAgencyDispatch: async (incidentId: string, data: { agency_type: AgencyType; agency_unit_id: string }): Promise<AgencyDispatch> => {
+    const res = await apiClient.post<AgencyDispatch>(`/incidents/${incidentId}/dispatch-agency`, data);
+    return res.data;
+  },
+
+  updateAgencyDispatchStatus: async (dispatchId: string, status: AgencyDispatchStatus): Promise<AgencyDispatch> => {
+    const res = await apiClient.patch<AgencyDispatch>(`/agency-dispatches/${dispatchId}`, { status });
+    return res.data;
+  },
+
+  getAgencyDispatches: async (params?: { incident_id?: string; agency_unit_id?: string; agency_type?: AgencyType }): Promise<AgencyDispatch[]> => {
+    const res = await apiClient.get<AgencyDispatch[]>('/agency-dispatches', { params });
+    return res.data;
+  },
+
+  getAgencyDispatch: async (dispatchId: string): Promise<AgencyDispatch> => {
+    const res = await apiClient.get<AgencyDispatch>(`/agency-dispatches/${dispatchId}`);
+    return res.data;
+  },
+
+  getIncidentResponseStatus: async (incidentId: string): Promise<IncidentResponseStatus> => {
+    const res = await apiClient.get<IncidentResponseStatus>(`/incidents/${incidentId}/response-status`);
     return res.data;
   },
 

@@ -229,6 +229,42 @@ Response 200: array of alert objects, newest first
 
 ---
 
+## Public Relative Tracking
+
+### GET /track/{token}
+Auth: none required (intentionally public/unauthenticated endpoint reachable via unguessable 24-hour token so relatives without system accounts can track live emergency status)
+Response 200:
+```json
+{
+  "token": "I2L6VQAY_0sauT7DnjeR4ODGeYhn3dBtFyFgxCoqx_s",
+  "expires_at": "2026-08-20T16:33:35Z",
+  "incident_type": "accident",
+  "severity": "severe",
+  "status": "open",
+  "latitude": 12.9716,
+  "longitude": 77.5946,
+  "created_at": "2026-08-19T16:33:35Z",
+  "owner_name": "Alexander Wright",
+  "hospital": {
+    "name": "Central General Hospital",
+    "phone": "+91 80 1111 2222"
+  },
+  "ambulance": {
+    "label": "Rapid Response Unit A",
+    "current_latitude": 12.9720,
+    "current_longitude": 77.5950,
+    "status": "dispatched",
+    "last_location_update": "2026-08-19T16:35:00Z"
+  },
+  "dispatch_status": "dispatched",
+  "dispatched_at": "2026-08-19T16:34:00Z"
+}
+```
+Response 404: tracking link is invalid or has expired.
+
+---
+
+
 ## WebSocket
 
 ### WS /ws/live

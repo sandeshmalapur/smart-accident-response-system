@@ -27,8 +27,16 @@ async def get_device_by_code(db: AsyncSession, device_code: str) -> Device | Non
 
 
 async def create_device(db: AsyncSession, data: DeviceCreate) -> Device:
-    device = Device(device_code=data.device_code, device_type=data.device_type, label=data.label)
+    device = Device(
+        device_code=data.device_code,
+        device_type=data.device_type,
+        label=data.label,
+        owner_name=data.owner_name,
+        emergency_contact_name=data.emergency_contact_name,
+        emergency_contact_phone=data.emergency_contact_phone,
+    )
     db.add(device)
     await db.commit()
     await db.refresh(device)
     return device
+

@@ -12,10 +12,17 @@ export function useCreateDevice() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { device_code: string; device_type: 'simulator' | 'esp32'; label?: string }) =>
-      api.createDevice(data),
+    mutationFn: (data: {
+      device_code: string;
+      device_type: 'simulator' | 'esp32';
+      label?: string;
+      owner_name?: string;
+      emergency_contact_name?: string;
+      emergency_contact_phone?: string;
+    }) => api.createDevice(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
     },
   });
 }
+

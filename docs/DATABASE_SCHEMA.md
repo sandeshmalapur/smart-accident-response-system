@@ -16,7 +16,7 @@ Operators/admins who log into the dashboard. No public signup — accounts provi
 | email | VARCHAR(255) | UNIQUE, NOT NULL |
 | hashed_password | VARCHAR(255) | NOT NULL |
 | full_name | VARCHAR(255) | NOT NULL |
-| role | VARCHAR(50) | NOT NULL, default 'operator' (values: admin, operator) |
+| role | VARCHAR(50) | NOT NULL, default 'operator' (values: admin, operator, ambulance_driver, police, fire - driver/police/fire reserved for future sprints) |
 | is_active | BOOLEAN | NOT NULL, default true |
 | created_at | TIMESTAMPTZ | NOT NULL, default now() |
 
@@ -31,6 +31,9 @@ Represents a simulator instance or a physical ESP32 unit. Needed so readings/inc
 | device_code | VARCHAR(100) | UNIQUE, NOT NULL (e.g. "SIM-001", "ESP32-004") |
 | device_type | VARCHAR(50) | NOT NULL (values: simulator, esp32) |
 | label | VARCHAR(255) | nullable (human-readable name, e.g. "Test Vehicle A") |
+| owner_name | VARCHAR(255) | nullable (e.g. "Jane Doe") |
+| emergency_contact_name | VARCHAR(255) | nullable (e.g. "John Doe") |
+| emergency_contact_phone | VARCHAR(50) | nullable (e.g. "+15551234567") |
 | is_active | BOOLEAN | NOT NULL, default true |
 | created_at | TIMESTAMPTZ | NOT NULL, default now() |
 
@@ -154,6 +157,17 @@ Automated victim check-in and response escalation records for severe accidents (
 | responded_at | TIMESTAMPTZ | nullable |
 | response | VARCHAR(50) | nullable (values: ok, help) |
 | escalated_at | TIMESTAMPTZ | nullable |
+
+### 10. `incident_tracking_tokens`
+Randomized, secure trackable link tokens generated on severe accidents for emergency relative SMS tracking (added Sprint 4).
+
+| Column | Type | Constraints |
+|---|---|---|
+| id | UUID | PK, default gen_random_uuid() |
+| incident_id | UUID | FK → incidents.id, NOT NULL |
+| token | VARCHAR(255) | UNIQUE, NOT NULL, INDEX |
+| created_at | TIMESTAMPTZ | NOT NULL, default now() |
+| expires_at | TIMESTAMPTZ | NOT NULL (default 24h from creation) |
 
 ---
 

@@ -29,9 +29,12 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(50), nullable=False, default="operator", server_default="operator")
+    role: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="operator", server_default="operator"
+    )  # admin | operator | ambulance_driver | police | fire (driver/police/fire reserved for future sprints)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
 
 
 class Device(Base):
@@ -41,11 +44,15 @@ class Device(Base):
     device_code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     device_type: Mapped[str] = mapped_column(String(50), nullable=False)  # simulator | esp32
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    owner_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    emergency_contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     sensor_readings: Mapped[list["SensorReading"]] = relationship(back_populates="device")
     incidents: Mapped[list["Incident"]] = relationship(back_populates="device")
+
 
 
 class SensorReading(Base):
@@ -200,5 +207,57 @@ class WelfareCheck(Base):
 
     incident: Mapped["Incident"] = relationship()
     device: Mapped["Device"] = relationship()
+
+
+class IncidentTrackingToken(Base):
+    __tablename__ = "incident_tracking_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    incident_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("incidents.id"), nullable=False)
+    token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    incident: Mapped["Incident"] = relationship()
+
+
+class AgencyUnit(Base):
+    __tablename__ = "agency_units"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agency_type: Mapped[str] = mapped_column(String(50), nullable=False)  # police | fire
+    unit_code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    current_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="available", server_default="available")
+    last_location_update: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    dispatches: Mapped[list["AgencyDispatch"]] = relationship(back_populates="agency_unit")
+
+
+class AgencyDispatch(Base):
+    __tablename__ = "agency_dispatches"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    incident_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("incidents.id"), nullable=False)
+    agency_unit_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("agency_units.id"), nullable=False)
+    dispatched_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    agency_type: Mapped[str] = mapped_column(String(50), nullable=False)  # police | fire
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending", server_default="pending")
+    dispatched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    incident: Mapped["Incident"] = relationship()
+    agency_unit: Mapped["AgencyUnit"] = relationship(back_populates="dispatches")
+    user: Mapped["User | None"] = relationship()
+
+
 
 

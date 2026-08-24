@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { MapPin, Clock, Cpu, ExternalLink, Activity } from 'lucide-react';
 import { AnnotatedIncident } from '../lib/types';
 import { StatusBadge } from './StatusBadge';
+import { ResponseStatusBadge } from './ResponseStatusBadge';
 
 interface IncidentCardProps {
   incident: AnnotatedIncident;
@@ -29,6 +30,7 @@ export const IncidentCard: React.FC<IncidentCardProps> = ({ incident }) => {
           <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge variant={incident.badgeVariant} />
             <StatusBadge status={incident.status} size="sm" />
+            <ResponseStatusBadge responseStatus={incident.response_status} compact />
             {isCoOccurring && (
               <span className="px-2 py-0.5 text-[10px] font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700 rounded">
                 Secondary Anomaly

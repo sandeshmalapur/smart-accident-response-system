@@ -101,9 +101,9 @@ async def create_incident_from_inference(
     await db.commit()
     await db.refresh(incident)
 
-    # Sprint 3: Auto-create welfare check for severe accidents ONLY
+    # Sprint 3 & 4: Auto-create welfare check, tracking token, and SMS alert for severe accidents ONLY
     if incident.incident_type == "accident" and incident.severity == "severe":
-        from app.services import welfare_check_service
+        from app.services import device_service, sms_service, tracking_service, welfare_check_service
         from app.ws.manager import manager
         from app.schemas.welfare_check import WelfareCheckOut
 
@@ -113,4 +113,16 @@ async def create_incident_from_inference(
         wc_out = WelfareCheckOut.model_validate(welfare_check).model_dump(mode="json")
         await manager.broadcast_welfare_check(wc_out)
 
+        # Sprint 4: Tracking Token & SMS Notification
+        tracking_token = await tracking_service.create_tracking_token(db, incident_id=incident.id)
+
+        device = await device_service.get_device(db, device_id)
+        if device and device.emergency_contact_phone:
+            sms_service.send_accident_alert_sms(
+                phone=device.emergency_contact_phone,
+                owner_name=device.owner_name,
+                token=tracking_token.token,
+            )
+
     return incident
+

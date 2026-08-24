@@ -41,8 +41,16 @@ async def create_dispatch(
     db.add(dispatch)
     await db.commit()
 
-    # Re-fetch with relationships loaded
-    return await get_dispatch_by_id(db, dispatch.id)  # type: ignore[return-value]
+    fetched = await get_dispatch_by_id(db, dispatch.id)
+    try:
+        from app.services import response_status_service
+        from app.ws.manager import manager
+        resp_status = await response_status_service.get_incident_response_status(db, incident_id)
+        await manager.broadcast_incident_response_status(resp_status)
+    except Exception:
+        pass
+
+    return fetched  # type: ignore[return-value]
 
 
 async def update_dispatch_status(db: AsyncSession, dispatch: Dispatch, new_status: str) -> Dispatch:
@@ -68,7 +76,16 @@ async def update_dispatch_status(db: AsyncSession, dispatch: Dispatch, new_statu
 
     await db.commit()
 
-    return await get_dispatch_by_id(db, dispatch.id)  # type: ignore[return-value]
+    fetched = await get_dispatch_by_id(db, dispatch.id)
+    try:
+        from app.services import response_status_service
+        from app.ws.manager import manager
+        resp_status = await response_status_service.get_incident_response_status(db, dispatch.incident_id)
+        await manager.broadcast_incident_response_status(resp_status)
+    except Exception:
+        pass
+
+    return fetched  # type: ignore[return-value]
 
 
 async def get_dispatch_by_id(db: AsyncSession, dispatch_id: uuid.UUID) -> Dispatch | None:
@@ -96,3 +113,18 @@ async def list_dispatches(
 
     res = await db.execute(stmt)
     return list(res.scalars().all())
+
+
+async def get_active_dispatch_for_ambulance(db: AsyncSession, ambulance_id: uuid.UUID) -> Dispatch | None:
+    stmt = (
+        select(Dispatch)
+        .options(selectinload(Dispatch.ambulance), selectinload(Dispatch.incident))
+        .where(
+            Dispatch.ambulance_id == ambulance_id,
+            Dispatch.status.in_(["dispatched", "en_route", "arrived"]),
+        )
+        .order_by(Dispatch.dispatched_at.desc())
+    )
+    res = await db.execute(stmt)
+    return res.scalars().first()
+

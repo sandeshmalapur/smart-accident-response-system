@@ -15,6 +15,7 @@ import { AmbulancesPage } from './pages/AmbulancesPage';
 import { AmbulanceView } from './pages/AmbulanceView';
 import { VehicleCheckInPage } from './pages/VehicleCheckInPage';
 import { DevicesPage } from './pages/DevicesPage';
+import { TrackingPage } from './pages/TrackingPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +59,7 @@ export const App: React.FC = () => {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/vehicle/:deviceCode" element={<VehicleCheckInPage />} />
+            <Route path="/track/:token" element={<TrackingPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/ambulance/:ambulanceCode" element={<AmbulanceView />} />
               <Route path="/*" element={<MainLayout />} />
@@ -68,5 +70,6 @@ export const App: React.FC = () => {
     </QueryClientProvider>
   );
 };
+
 
 export default App;

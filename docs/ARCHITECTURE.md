@@ -90,7 +90,14 @@ Stores: raw sensor readings, incidents, severity scores, alert logs, user accoun
 5. WebSocket broadcasts updated state to all connected dashboards
 6. Dashboard renders live + historical views via WS + REST respectively
 
+3. **Twilio SMS Alert & Public Relative Tracking (Sprint 4)**:
+   - When a severe accident incident is flagged and the registered device has an emergency contact phone number, the backend generates a 24-hour cryptographically secure random tracking token (`IncidentTrackingToken`).
+   - `sms_service.py` dispatches an SMS containing a direct public tracking link (`http://<host>/track/<token>`).
+   - **Twilio Trial Account Limitation Note**: The implementation uses Twilio. In trial mode, SMS alerts can only be delivered to phone numbers that are explicitly verified in the Twilio console. Unconfigured credentials or unverified numbers trigger a graceful warning without crashing the backend service.
+   - **Public Tracking Endpoint (`GET /api/v1/track/{token}`)**: Intentionally unauthenticated endpoint allowing emergency contacts without dashboard user accounts to track live incident status, nearest hospital info, and live ambulance position on a clean, calming mobile interface.
+
 ## Key Constraints & Safety Rules
+
 
 1. **Swapping the Simulator for ESP32**: Must require **zero backend code changes** — only the publisher changes, MQTT schema stays identical.
 2. **Victim Welfare Check & Static Safety Guidance (Permanent Architectural Rule)**:

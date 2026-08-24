@@ -5,7 +5,21 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import alerts, ambulances, auth, devices, dispatches, hospitals, incidents, readings, welfare_checks, ws
+from app.api import (
+    agency_dispatches,
+    agency_units,
+    alerts,
+    ambulances,
+    auth,
+    devices,
+    dispatches,
+    hospitals,
+    incidents,
+    readings,
+    tracking,
+    welfare_checks,
+    ws,
+)
 from app.core import welfare_messages
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
@@ -68,9 +82,14 @@ app.include_router(incidents.router, prefix=API_PREFIX)
 app.include_router(hospitals.router, prefix=API_PREFIX)
 app.include_router(ambulances.router, prefix=API_PREFIX)
 app.include_router(dispatches.router, prefix=API_PREFIX)
+app.include_router(agency_units.router, prefix=API_PREFIX)
+app.include_router(agency_dispatches.router, prefix=API_PREFIX)
 app.include_router(welfare_checks.router, prefix=API_PREFIX)
+app.include_router(tracking.router, prefix=API_PREFIX)
 app.include_router(alerts.router, prefix=API_PREFIX)
 app.include_router(ws.router, prefix=API_PREFIX)
+
+
 
 
 @app.get("/health", tags=["health"])

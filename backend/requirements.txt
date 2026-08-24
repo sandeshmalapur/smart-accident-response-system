@@ -24,4 +24,8 @@ joblib==1.4.2
 scikit-learn==1.8.0
 numpy==1.26.4
 
+# SMS Alerts
+twilio>=8.0.0
+
+
 

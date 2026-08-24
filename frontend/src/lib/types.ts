@@ -18,8 +18,40 @@ export interface Device {
   device_code: string;
   device_type: 'simulator' | 'esp32';
   label?: string | null;
+  owner_name?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
   is_active: boolean;
   created_at: string;
+}
+
+export interface TrackingHospital {
+  name: string;
+  phone?: string | null;
+}
+
+export interface TrackingAmbulance {
+  label?: string | null;
+  current_latitude?: number | null;
+  current_longitude?: number | null;
+  status: AmbulanceStatus;
+  last_location_update?: string | null;
+}
+
+export interface TrackingDetail {
+  token: string;
+  expires_at: string;
+  incident_type: IncidentType;
+  severity?: IncidentSeverity | null;
+  status: IncidentStatus;
+  latitude: number;
+  longitude: number;
+  created_at: string;
+  owner_name?: string | null;
+  hospital?: TrackingHospital | null;
+  ambulance?: TrackingAmbulance | null;
+  dispatch_status?: DispatchStatus | null;
+  dispatched_at?: string | null;
 }
 
 export interface SensorReading {
@@ -86,6 +118,54 @@ export interface Dispatch {
   incident?: Incident | null;
 }
 
+export type AgencyType = 'police' | 'fire';
+export type AgencyUnitStatus = 'available' | 'dispatched' | 'on_scene' | 'unavailable';
+export type AgencyDispatchStatus = 'pending' | 'en_route' | 'on_scene' | 'completed' | 'cancelled';
+
+export interface AgencyUnit {
+  id: string;
+  agency_type: AgencyType;
+  unit_code: string;
+  label?: string | null;
+  contact_phone?: string | null;
+  current_latitude?: number | null;
+  current_longitude?: number | null;
+  status: AgencyUnitStatus;
+  last_location_update?: string | null;
+  created_at: string;
+}
+
+export interface AgencyUnitNearest extends AgencyUnit {
+  distance_km: number;
+}
+
+export interface AgencyDispatch {
+  id: string;
+  incident_id: string;
+  agency_unit_id: string;
+  dispatched_by?: string | null;
+  agency_type: AgencyType;
+  status: AgencyDispatchStatus;
+  dispatched_at: string;
+  updated_at: string;
+  agency_unit?: AgencyUnit | null;
+  incident?: Incident | null;
+}
+
+export interface ResponderSummary {
+  status: string;
+  ambulance_code?: string | null;
+  unit_code?: string | null;
+}
+
+export interface IncidentResponseStatus {
+  incident_id: string;
+  ambulance: ResponderSummary | null;
+  police: ResponderSummary | null;
+  fire: ResponderSummary | null;
+  overall_status: 'no_response' | 'responding' | 'resolved';
+}
+
 export interface Incident {
   id: string;
   device_id: string;
@@ -100,6 +180,7 @@ export interface Incident {
   status: IncidentStatus;
   created_at: string;
   resolved_at?: string | null;
+  response_status?: IncidentResponseStatus | null;
   sensor_reading?: SensorReading;
   nearest_hospital?: Hospital | null;
   alerts?: Alert[];
@@ -142,7 +223,9 @@ export type WSMessage =
   | { type: 'reading'; data: SensorReading }
   | { type: 'incident'; data: Incident }
   | { type: 'alert'; data: Alert }
-  | { type: 'welfare_check'; data: WelfareCheck };
+  | { type: 'welfare_check'; data: WelfareCheck }
+  | { type: 'agency_dispatch'; data: AgencyDispatch }
+  | { type: 'incident_response_status'; data: IncidentResponseStatus };
 
 export interface AnnotatedIncident extends Incident {
   isCoOccurringGasLeak: boolean;
