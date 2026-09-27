@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Navigation, Radio, Building2, AlertTriangle, Cpu, Truck } from 'lucide-react';
+import { Navigation, Radio, Building2, AlertTriangle, Cpu, Truck, ArrowUpRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { SensorReading, Incident } from '../lib/types';
 import { useHospitals } from '../hooks/useHospitals';
 import { useAmbulances } from '../hooks/useAmbulances';
@@ -224,6 +225,13 @@ export const MapView: React.FC<MapViewProps> = ({ readings, incidents }) => {
             <Building2 className="w-3 h-3" />
             {hospitals.length} Hospitals
           </span>
+          <Link
+            to="/map"
+            className="flex items-center gap-1 px-3 py-1 rounded-full bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-bold transition-all shadow-sm shadow-cyan-500/10"
+          >
+            <span>Full Radar Map</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
       </div>
 

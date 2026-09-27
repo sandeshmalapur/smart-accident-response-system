@@ -132,6 +132,9 @@ class MqttSubscriber:
                 payload.latitude,
                 payload.longitude,
             )
+            from app.schemas.ambulance import AmbulanceOut
+            ambulance_out = AmbulanceOut.model_validate(ambulance).model_dump(mode="json")
+            await manager.broadcast("ambulance_location", ambulance_out)
 
 
     async def _handle_telemetry(self, data: dict) -> None:

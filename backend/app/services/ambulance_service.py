@@ -32,7 +32,10 @@ async def create_ambulance(db: AsyncSession, data: AmbulanceCreate) -> Ambulance
     ambulance = Ambulance(
         ambulance_code=data.ambulance_code,
         label=data.label,
+        current_latitude=12.9716,
+        current_longitude=77.5946,
         status="available",
+        last_location_update=datetime.now(timezone.utc),
     )
     db.add(ambulance)
     await db.commit()

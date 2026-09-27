@@ -1,10 +1,11 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, AlertCircle, Cpu, Building2, Truck } from 'lucide-react';
+import { LayoutDashboard, Navigation, AlertCircle, Cpu, Building2, Truck } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const navItems = [
-    { to: '/dashboard', label: 'Live Operations', icon: LayoutDashboard },
+    { to: '/dashboard', label: 'Command Center', icon: LayoutDashboard },
+    { to: '/map', label: 'GIS Radar Map', icon: Navigation },
     { to: '/incidents', label: 'Incident Records', icon: AlertCircle },
     { to: '/hospitals', label: 'Hospitals Directory', icon: Building2 },
     { to: '/ambulances', label: 'Ambulance Fleet', icon: Truck },

@@ -73,6 +73,63 @@ async def seed() -> None:
             db.add_all(hospitals)
             print("Created default sample hospitals")
 
+        from datetime import datetime, timezone
+        from app.db.models import Ambulance
+        now = datetime.now(timezone.utc)
+        ambulance_specs = [
+            ("AMB-001", "City Central Rapid Response", 12.9740, 77.5920),
+            ("AMB-002", "Victoria Trauma Unit", 12.9650, 77.5780),
+            ("AMB-003", "Manipal Advanced Life Support", 12.9560, 77.6380),
+        ]
+        for code, label, lat, lng in ambulance_specs:
+            res = await db.execute(select(Ambulance).where(Ambulance.ambulance_code == code))
+            amb = res.scalar_one_or_none()
+            if amb is None:
+                db.add(
+                    Ambulance(
+                        ambulance_code=code,
+                        label=label,
+                        current_latitude=lat,
+                        current_longitude=lng,
+                        status="available",
+                        last_location_update=now,
+                    )
+                )
+                print(f"Created ambulance {code} ({label}) at ({lat}, {lng})")
+            else:
+                amb.current_latitude = lat
+                amb.current_longitude = lng
+                amb.last_location_update = now
+                print(f"Updated ambulance {code} coordinates to ({lat}, {lng})")
+
+        from app.db.models import AgencyUnit
+        agency_specs = [
+            ("police", "POL-001", "Central Police Patrol 1", "+91 80 2222 1000", 12.9780, 77.5850),
+            ("fire", "FIRE-001", "Metro Fire & Rescue Unit 1", "+91 80 2222 1010", 12.9610, 77.6020),
+        ]
+        for utype, code, label, phone, lat, lng in agency_specs:
+            res = await db.execute(select(AgencyUnit).where(AgencyUnit.unit_code == code))
+            unit = res.scalar_one_or_none()
+            if unit is None:
+                db.add(
+                    AgencyUnit(
+                        agency_type=utype,
+                        unit_code=code,
+                        label=label,
+                        contact_phone=phone,
+                        current_latitude=lat,
+                        current_longitude=lng,
+                        status="available",
+                        last_location_update=now,
+                    )
+                )
+                print(f"Created agency unit {code} ({label}) at ({lat}, {lng})")
+            else:
+                unit.current_latitude = lat
+                unit.current_longitude = lng
+                unit.last_location_update = now
+                print(f"Updated agency unit {code} coordinates to ({lat}, {lng})")
+
         await db.commit()
 
 

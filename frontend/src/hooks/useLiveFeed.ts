@@ -72,6 +72,8 @@ export function useLiveFeed(token: string | null) {
           queryClient.invalidateQueries({ queryKey: ['incidents'] });
           queryClient.invalidateQueries({ queryKey: ['agency-dispatches'] });
           queryClient.invalidateQueries({ queryKey: ['dispatches'] });
+        } else if (msg.type === 'ambulance_location') {
+          queryClient.invalidateQueries({ queryKey: ['ambulances'] });
         }
       } catch (err) {
         console.error('[WS] Failed to parse WebSocket message:', err);

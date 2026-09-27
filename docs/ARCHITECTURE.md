@@ -8,7 +8,7 @@ v
 [Ingestion Service]
 /
 [ML Inference] [PostgreSQL]
-(SVM + GMM) (Supabase)
+(SVM + GMM) (Supabase) 
 \ /
 v v
 [WebSocket Broadcaster]

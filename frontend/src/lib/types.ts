@@ -225,7 +225,8 @@ export type WSMessage =
   | { type: 'alert'; data: Alert }
   | { type: 'welfare_check'; data: WelfareCheck }
   | { type: 'agency_dispatch'; data: AgencyDispatch }
-  | { type: 'incident_response_status'; data: IncidentResponseStatus };
+  | { type: 'incident_response_status'; data: IncidentResponseStatus }
+  | { type: 'ambulance_location'; data: Ambulance };
 
 export interface AnnotatedIncident extends Incident {
   isCoOccurringGasLeak: boolean;

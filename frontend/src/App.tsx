@@ -16,6 +16,7 @@ import { AmbulanceView } from './pages/AmbulanceView';
 import { VehicleCheckInPage } from './pages/VehicleCheckInPage';
 import { DevicesPage } from './pages/DevicesPage';
 import { TrackingPage } from './pages/TrackingPage';
+import { LiveMapPage } from './pages/LiveMapPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,9 +36,10 @@ const MainLayout: React.FC = () => {
       <Navbar isConnected={isConnected} />
       <div className="flex flex-1">
         <Sidebar />
-        <main className="flex-1 p-6 overflow-y-auto max-w-7xl">
+        <main className="flex-1 p-6 overflow-y-auto max-w-[1600px] w-full mx-auto">
           <Routes>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/map" element={<LiveMapPage />} />
             <Route path="/incidents" element={<IncidentsPage />} />
             <Route path="/incidents/:id" element={<IncidentDetailPage />} />
             <Route path="/hospitals" element={<HospitalsPage />} />

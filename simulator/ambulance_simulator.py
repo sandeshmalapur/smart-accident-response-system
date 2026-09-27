@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 import random
 import signal
@@ -206,14 +207,15 @@ def main() -> int:
                         dist_deg,
                     )
             else:
+                heading = tick * 0.35
+                current_lat += 0.0010 * math.cos(heading)
+                current_lng += 0.0010 * math.sin(heading)
                 logger.info(
                     "tick=%d [PATROLLING] published location lat=%.5f lng=%.5f",
                     tick,
                     current_lat,
                     current_lng,
                 )
-                current_lat += random.uniform(-0.00015, 0.00015)
-                current_lng += random.uniform(-0.00015, 0.00015)
 
             tick += 1
 
