@@ -310,7 +310,7 @@ export const MapView: React.FC<MapViewProps> = ({ readings, incidents }) => {
             .filter((amb) => amb.current_latitude !== null && amb.current_latitude !== undefined && amb.current_longitude !== null && amb.current_longitude !== undefined)
             .map((amb) => (
               <Marker
-                key={amb.id}
+                key={`dash-amb-${amb.id}-${amb.current_latitude}-${amb.current_longitude}-${amb.status}`}
                 position={[amb.current_latitude!, amb.current_longitude!]}
                 icon={createAmbulanceIcon(amb.status)}
               >

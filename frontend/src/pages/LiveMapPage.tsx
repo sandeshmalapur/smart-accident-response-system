@@ -404,7 +404,7 @@ export const LiveMapPage: React.FC = () => {
               {showAmbulances &&
                 activeAmbulances.map((amb) => (
                   <Marker
-                    key={amb.id}
+                    key={`amb-${amb.id}-${amb.current_latitude}-${amb.current_longitude}-${amb.status}`}
                     position={[amb.current_latitude!, amb.current_longitude!]}
                     icon={createAmbulanceIcon(amb.status)}
                   >

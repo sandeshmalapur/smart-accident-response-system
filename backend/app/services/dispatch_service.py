@@ -35,7 +35,6 @@ async def _navigate_ambulance_to_incident(
             disp = await get_dispatch_by_id(db, dispatch_id)
             if disp and disp.status == "dispatched":
                 await update_dispatch_status(db, disp, "en_route")
-                await manager.broadcast("dispatch", DispatchOut.model_validate(disp).model_dump(mode="json"))
                 logger.info("Ambulance dispatch %s transitioned to 'en_route'", dispatch_id)
 
         # Continual movement toward incident
@@ -69,9 +68,6 @@ async def _navigate_ambulance_to_incident(
                     await ambulance_service.update_ambulance_location(db, amb, lat=target_lat, lng=target_lng)
                     await update_dispatch_status(db, disp, "arrived")
                     logger.info("Ambulance %s ARRIVED at incident scene %s", amb.ambulance_code, incident_id)
-
-                    await manager.broadcast("dispatch", DispatchOut.model_validate(disp).model_dump(mode="json"))
-                    await manager.broadcast("ambulance_location", AmbulanceOut.model_validate(amb).model_dump(mode="json"))
                     break
 
                 # Advance toward incident with guaranteed minimum step so it smoothly arrives in ~10-15 steps

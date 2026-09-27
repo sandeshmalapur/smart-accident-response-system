@@ -73,10 +73,30 @@ export function useLiveFeed(token: string | null) {
           queryClient.invalidateQueries({ queryKey: ['agency-dispatches'] });
           queryClient.invalidateQueries({ queryKey: ['dispatches'] });
         } else if (msg.type === 'dispatch') {
+          const dispData = msg.data;
+          queryClient.setQueriesData<any>({ queryKey: ['dispatches'] }, (old: any) => {
+            if (!old) return [dispData];
+            if (Array.isArray(old)) {
+              const exists = old.some((d: any) => d.id === dispData.id);
+              if (exists) {
+                return old.map((d: any) => (d.id === dispData.id ? { ...d, ...dispData } : d));
+              }
+              return [dispData, ...old];
+            }
+            return old;
+          });
           queryClient.invalidateQueries({ queryKey: ['dispatches'] });
           queryClient.invalidateQueries({ queryKey: ['ambulances'] });
           queryClient.invalidateQueries({ queryKey: ['incidents'] });
         } else if (msg.type === 'ambulance_location') {
+          const ambData = msg.data;
+          queryClient.setQueriesData<any>({ queryKey: ['ambulances'] }, (old: any) => {
+            if (!old) return old;
+            if (Array.isArray(old)) {
+              return old.map((a: any) => (a.id === ambData.id ? { ...a, ...ambData } : a));
+            }
+            return old;
+          });
           queryClient.invalidateQueries({ queryKey: ['ambulances'] });
           queryClient.invalidateQueries({ queryKey: ['dispatches'] });
         }
