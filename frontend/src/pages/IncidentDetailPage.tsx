@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useIncident, useIncidents, useUpdateIncidentStatus } from '../hooks/useIncidents';
-import { useNearestAmbulances } from '../hooks/useAmbulances';
+import { useNearestAmbulances, useAmbulance } from '../hooks/useAmbulances';
 import { useDispatches, useCreateDispatch } from '../hooks/useDispatch';
 import { useWelfareChecks } from '../hooks/useWelfareCheck';
 import { annotateIncidentCoOccurrence } from '../lib/incident-utils';
@@ -9,7 +9,17 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ResponseStatusBadge } from '../components/ResponseStatusBadge';
 import { AgencyDispatchPanel } from '../components/AgencyDispatchPanel';
 import { IncidentStatus } from '../lib/types';
-import { ArrowLeft, MapPin, CheckSquare, Activity, Bell, Navigation, Truck, Send, ShieldAlert, PhoneCall, CheckCircle2, HeartHandshake } from 'lucide-react';
+import { ArrowLeft, MapPin, CheckSquare, Activity, Bell, Navigation, Truck, Send, ShieldAlert, PhoneCall, CheckCircle2, HeartHandshake, ExternalLink } from 'lucide-react';
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371.0;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 export const IncidentDetailPage: React.FC = () => {
   const { id = '' } = useParams<{ id: string }>();
@@ -38,6 +48,21 @@ export const IncidentDetailPage: React.FC = () => {
   const activeDispatch = useMemo(() => {
     return dispatches.length > 0 ? dispatches[0] : null;
   }, [dispatches]);
+
+  // Live ambulance telemetry
+  const { data: liveAmbulance } = useAmbulance(
+    activeDispatch?.ambulance?.ambulance_code || activeDispatch?.ambulance_id
+  );
+
+  const ambLat = liveAmbulance?.current_latitude ?? activeDispatch?.ambulance?.current_latitude;
+  const ambLng = liveAmbulance?.current_longitude ?? activeDispatch?.ambulance?.current_longitude;
+
+  const remainingDistanceKm = useMemo(() => {
+    if (ambLat !== undefined && ambLat !== null && ambLng !== undefined && ambLng !== null && incident?.latitude && incident?.longitude) {
+      return haversineKm(ambLat, ambLng, incident.latitude, incident.longitude);
+    }
+    return null;
+  }, [ambLat, ambLng, incident]);
 
   // Annotate co-occurrence including sibling incidents sharing the same sensor_reading_id
   const annotatedIncident = useMemo(() => {
@@ -231,33 +256,83 @@ export const IncidentDetailPage: React.FC = () => {
           </div>
 
           {activeDispatch ? (
-            <div className="p-4 rounded-xl bg-slate-900/80 border border-amber-500/40 space-y-3 font-mono text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-amber-400 flex items-center gap-2">
-                  <Truck className="w-4 h-4" /> Active Dispatch Assigned
+            <div className="p-5 rounded-xl bg-slate-900/90 border border-amber-500/40 space-y-4 font-mono text-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <span className="font-bold text-amber-400 flex items-center gap-2 text-sm">
+                  <Truck className="w-5 h-5" /> Emergency Response Unit Assigned
                 </span>
-                <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase font-bold text-[11px]">
-                  Dispatch Status: {activeDispatch.status}
-                </span>
+                <div>
+                  {activeDispatch.status === 'dispatched' && (
+                    <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-amber-500/10">
+                      <Truck className="w-3.5 h-3.5 animate-bounce text-amber-400" /> DISPATCHED — PREPARING EN ROUTE
+                    </span>
+                  )}
+                  {activeDispatch.status === 'en_route' && (
+                    <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 uppercase font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-cyan-500/20 animate-pulse">
+                      <Navigation className="w-3.5 h-3.5 animate-spin text-cyan-400" /> EN ROUTE — ADVANCING TO INCIDENT
+                    </span>
+                  )}
+                  {activeDispatch.status === 'arrived' && (
+                    <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-emerald-500/20">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" /> ARRIVED AT INCIDENT SCENE
+                    </span>
+                  )}
+                  {activeDispatch.status !== 'dispatched' && activeDispatch.status !== 'en_route' && activeDispatch.status !== 'arrived' && (
+                    <span className="px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700 uppercase font-bold text-xs">
+                      STATUS: {activeDispatch.status}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-slate-300">
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-slate-300 bg-slate-950/70 p-3.5 rounded-lg border border-slate-800/80">
                 <div>
-                  <span className="text-slate-500 block text-[10px] uppercase">Unit Code</span>
-                  <span className="font-bold text-cyan-400">{activeDispatch.ambulance?.ambulance_code || activeDispatch.ambulance_id}</span>
+                  <span className="text-slate-500 block text-[10px] uppercase font-semibold">Ambulance Unit</span>
+                  <span className="font-bold text-cyan-400 text-sm">
+                    {activeDispatch.ambulance?.ambulance_code || activeDispatch.ambulance_id}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[10px] uppercase">Dispatched At</span>
-                  <span>{new Date(activeDispatch.dispatched_at).toLocaleTimeString()}</span>
+                  <span className="text-slate-500 block text-[10px] uppercase font-semibold">Live Distance</span>
+                  <span className={`font-bold text-sm ${activeDispatch.status === 'arrived' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {activeDispatch.status === 'arrived'
+                      ? '0.00 km (AT SCENE)'
+                      : remainingDistanceKm !== null
+                      ? `${remainingDistanceKm.toFixed(2)} km`
+                      : 'Calculating...'}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[10px] uppercase">Unit Tablet View</span>
-                  <Link
-                    to={`/ambulance/${activeDispatch.ambulance?.ambulance_code || activeDispatch.ambulance_id}`}
-                    className="text-cyan-400 hover:underline font-bold"
-                  >
-                    Open Ambulance View &rarr;
-                  </Link>
+                  <span className="text-slate-500 block text-[10px] uppercase font-semibold">Ambulance GPS</span>
+                  <span className="text-xs text-slate-300 font-mono">
+                    {ambLat != null && ambLng != null
+                      ? `${ambLat.toFixed(4)}°, ${ambLng.toFixed(4)}°`
+                      : 'Acquiring...'}
+                  </span>
                 </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-semibold">Dispatched At</span>
+                  <span className="text-xs text-slate-300">
+                    {new Date(activeDispatch.dispatched_at).toLocaleTimeString()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 text-xs">
+                <Link
+                  to="/map"
+                  className="inline-flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 font-bold transition-colors"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  View Moving Ambulance on GIS Command Map &rarr;
+                </Link>
+                <Link
+                  to={`/ambulance/${activeDispatch.ambulance?.ambulance_code || activeDispatch.ambulance_id}`}
+                  className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Open Driver Telemetry Cockpit &rarr;
+                </Link>
               </div>
             </div>
           ) : isLoadingAmbulances ? (

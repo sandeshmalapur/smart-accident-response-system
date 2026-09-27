@@ -132,6 +132,22 @@ class MqttSubscriber:
                 payload.latitude,
                 payload.longitude,
             )
+
+            # Auto-advance active dispatch status if present
+            from app.services import dispatch_service
+            disp = await dispatch_service.get_active_dispatch_for_ambulance(db, ambulance.id)
+            if disp:
+                if disp.status == "dispatched":
+                    await dispatch_service.update_dispatch_status(db, disp, "en_route")
+                    logger.info("Ambulance %s MQTT telemetry transitioned dispatch to 'en_route'", ambulance.ambulance_code)
+                elif disp.status == "en_route" and disp.incident:
+                    d_lat = disp.incident.latitude - payload.latitude
+                    d_lng = disp.incident.longitude - payload.longitude
+                    dist_deg = (d_lat**2 + d_lng**2) ** 0.5
+                    if dist_deg <= 0.00045:
+                        await dispatch_service.update_dispatch_status(db, disp, "arrived")
+                        logger.info("Ambulance %s MQTT telemetry reached incident: transitioned to 'arrived'", ambulance.ambulance_code)
+
             from app.schemas.ambulance import AmbulanceOut
             ambulance_out = AmbulanceOut.model_validate(ambulance).model_dump(mode="json")
             await manager.broadcast("ambulance_location", ambulance_out)

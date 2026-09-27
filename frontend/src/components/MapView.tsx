@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Navigation, Radio, Building2, AlertTriangle, Cpu, Truck, ArrowUpRight } from 'lucide-react';
@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { SensorReading, Incident } from '../lib/types';
 import { useHospitals } from '../hooks/useHospitals';
 import { useAmbulances } from '../hooks/useAmbulances';
+import { useDispatches } from '../hooks/useDispatch';
 import { useAgencyUnits } from '../hooks/useAgencyUnits';
 
 // Helper function to compute Haversine distance in JS for popup display
@@ -180,6 +181,13 @@ export const MapView: React.FC<MapViewProps> = ({ readings, incidents }) => {
   const { data: hospitals = [] } = useHospitals();
   const { data: ambulances = [] } = useAmbulances();
   const { data: agencyUnits = [] } = useAgencyUnits();
+  const { data: dispatches = [] } = useDispatches();
+
+  const activeDispatches = useMemo(() => {
+    return dispatches.filter(
+      (d) => d.status === 'dispatched' || d.status === 'en_route' || d.status === 'arrived'
+    );
+  }, [dispatches]);
 
   // Compute map center from readings, incidents, hospitals, ambulances, or fallback (Bangalore coordinates)
   const mapCenter = useMemo<[number, number]>(() => {
@@ -263,6 +271,39 @@ export const MapView: React.FC<MapViewProps> = ({ readings, incidents }) => {
               </Popup>
             </Marker>
           ))}
+
+          {/* Active Dispatch Navigation Polylines */}
+          {activeDispatches.map((disp) => {
+            const amb = ambulances.find((a) => a.id === disp.ambulance_id);
+            const inc = incidents.find((i) => i.id === disp.incident_id);
+            if (
+              !amb ||
+              !inc ||
+              amb.current_latitude == null ||
+              amb.current_longitude == null ||
+              inc.latitude == null ||
+              inc.longitude == null
+            ) {
+              return null;
+            }
+
+            const isArrived = disp.status === 'arrived';
+            return (
+              <Polyline
+                key={`dash-nav-${disp.id}`}
+                positions={[
+                  [amb.current_latitude, amb.current_longitude],
+                  [inc.latitude, inc.longitude],
+                ]}
+                pathOptions={{
+                  color: isArrived ? '#10b981' : '#f59e0b',
+                  weight: 3.5,
+                  opacity: 0.85,
+                  dashArray: isArrived ? undefined : '6, 6',
+                }}
+              />
+            );
+          })}
 
           {/* Ambulance Markers */}
           {ambulances

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -19,12 +19,15 @@ import {
   PhoneCall,
   Clock,
   ArrowUpRight,
+  Send,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useLiveFeed } from '../hooks/useLiveFeed';
 import { useIncidents } from '../hooks/useIncidents';
 import { useHospitals } from '../hooks/useHospitals';
 import { useAmbulances } from '../hooks/useAmbulances';
+import { useDispatches, useCreateDispatch } from '../hooks/useDispatch';
 import { useAgencyUnits } from '../hooks/useAgencyUnits';
 import { useDevices } from '../hooks/useDevices';
 import { Link } from 'react-router-dom';
@@ -213,6 +216,9 @@ export const LiveMapPage: React.FC = () => {
   const { data: agencyUnits = [] } = useAgencyUnits();
   const { data: devices = [] } = useDevices();
 
+  const { data: dispatches = [] } = useDispatches();
+  const createDispatchMutation = useCreateDispatch();
+
   // Combine incidents
   const combinedIncidents = useMemo(() => {
     const map = new Map<string, any>();
@@ -222,6 +228,21 @@ export const LiveMapPage: React.FC = () => {
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   }, [restIncidents, liveIncidents]);
+
+  // Active dispatches currently navigating or on scene
+  const activeDispatches = useMemo(() => {
+    return dispatches.filter(
+      (d) => d.status === 'dispatched' || d.status === 'en_route' || d.status === 'arrived'
+    );
+  }, [dispatches]);
+
+  const dispatchByIncidentId = useMemo(() => {
+    const map = new Map<string, typeof dispatches[0]>();
+    activeDispatches.forEach((d) => {
+      if (d.incident_id) map.set(d.incident_id, d);
+    });
+    return map;
+  }, [activeDispatches]);
 
   // Layer filter state
   const [showAmbulances, setShowAmbulances] = useState(true);
@@ -458,6 +479,39 @@ export const LiveMapPage: React.FC = () => {
                   </Marker>
                 ))}
 
+              {/* Dynamic Navigation Polylines for Active Dispatches */}
+              {activeDispatches.map((disp) => {
+                const amb = ambulances.find((a) => a.id === disp.ambulance_id);
+                const inc = combinedIncidents.find((i) => i.id === disp.incident_id);
+                if (
+                  !amb ||
+                  !inc ||
+                  amb.current_latitude == null ||
+                  amb.current_longitude == null ||
+                  inc.latitude == null ||
+                  inc.longitude == null
+                ) {
+                  return null;
+                }
+
+                const isArrived = disp.status === 'arrived';
+                return (
+                  <Polyline
+                    key={`nav-${disp.id}`}
+                    positions={[
+                      [amb.current_latitude, amb.current_longitude],
+                      [inc.latitude, inc.longitude],
+                    ]}
+                    pathOptions={{
+                      color: isArrived ? '#10b981' : '#f59e0b',
+                      weight: 4,
+                      opacity: 0.85,
+                      dashArray: isArrived ? undefined : '8, 8',
+                    }}
+                  />
+                );
+              })}
+
               {/* Incidents */}
               {showIncidents &&
                 combinedIncidents.map((inc) => {
@@ -466,6 +520,23 @@ export const LiveMapPage: React.FC = () => {
                   if (inc.nearest_hospital) {
                     distKm = haversineKm(inc.latitude, inc.longitude, inc.nearest_hospital.latitude, inc.nearest_hospital.longitude);
                   }
+
+                  const activeDisp = dispatchByIncidentId.get(inc.id);
+                  let nearestAmb: typeof ambulances[0] | null = null;
+                  let minAmbDist = Infinity;
+                  if (!activeDisp && inc.status === 'open') {
+                    const availableAmbs = ambulances.filter(
+                      (a) => a.status === 'available' && a.current_latitude != null && a.current_longitude != null
+                    );
+                    for (const a of availableAmbs) {
+                      const d = haversineKm(inc.latitude, inc.longitude, a.current_latitude!, a.current_longitude!);
+                      if (d < minAmbDist) {
+                        minAmbDist = d;
+                        nearestAmb = a;
+                      }
+                    }
+                  }
+
                   return (
                     <Marker
                       key={inc.id}
@@ -473,7 +544,7 @@ export const LiveMapPage: React.FC = () => {
                       icon={createIncidentIcon(inc.severity, inc.incident_type)}
                     >
                       <Popup>
-                        <div className="p-2.5 font-mono text-xs space-y-1.5 text-slate-900 min-w-[210px]">
+                        <div className="p-2.5 font-mono text-xs space-y-2 text-slate-900 min-w-[220px]">
                           <div className="font-bold text-rose-700 flex items-center justify-between border-b pb-1">
                             <span className="uppercase flex items-center gap-1">
                               <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
@@ -490,12 +561,47 @@ export const LiveMapPage: React.FC = () => {
                               🏥 Nearest Hospital: {nearestHospName} {distKm && `(${distKm.toFixed(2)} km)`}
                             </div>
                           )}
-                          <div className="pt-1">
+
+                          {activeDisp ? (
+                            <div className="p-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 font-mono text-xs space-y-1">
+                              <div className="font-bold flex items-center justify-between">
+                                <span className="flex items-center gap-1">
+                                  <Truck className="w-3 h-3 text-amber-700" />
+                                  {activeDisp.ambulance?.ambulance_code || 'AMB'}
+                                </span>
+                                <span
+                                  className={`uppercase text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                    activeDisp.status === 'arrived'
+                                      ? 'bg-emerald-200 text-emerald-900'
+                                      : 'bg-amber-200 text-amber-900 animate-pulse'
+                                  }`}
+                                >
+                                  {activeDisp.status}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-amber-900 font-semibold">
+                                {activeDisp.status === 'arrived' ? '✅ At Scene' : '⚡ En Route to Incident Area'}
+                              </div>
+                            </div>
+                          ) : nearestAmb ? (
+                            <button
+                              onClick={() =>
+                                createDispatchMutation.mutate({ incidentId: inc.id, ambulanceId: nearestAmb!.id })
+                              }
+                              disabled={createDispatchMutation.isPending}
+                              className="w-full py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 shadow-md shadow-emerald-900/30"
+                            >
+                              <Truck className="w-3.5 h-3.5" />
+                              Dispatch {nearestAmb.ambulance_code} ({minAmbDist.toFixed(2)} km)
+                            </button>
+                          ) : null}
+
+                          <div className="pt-0.5 border-t">
                             <Link
                               to={`/incidents/${inc.id}`}
                               className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 underline"
                             >
-                              Dispatch Emergency Units &rarr;
+                              Full Incident Dossier &rarr;
                             </Link>
                           </div>
                         </div>
@@ -633,46 +739,87 @@ export const LiveMapPage: React.FC = () => {
                         inc.incident_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         (inc.severity && inc.severity.toLowerCase().includes(searchQuery.toLowerCase()))
                     )
-                    .map((inc) => (
-                      <div
-                        key={inc.id}
-                        className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-amber-500/40 transition-all flex items-center justify-between group"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs font-mono text-amber-400 uppercase">
-                              ⚠️ {inc.incident_type.replace('_', ' ')}
-                            </span>
-                            <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                              {inc.severity || 'alert'}
-                            </span>
-                          </div>
-                          <p className="text-[10px] font-mono text-slate-400">
-                            Status: <span className="uppercase text-slate-200">{inc.status}</span>
-                          </p>
-                          <p className="text-[10px] font-mono text-slate-500">
-                            GPS: {inc.latitude.toFixed(4)}, {inc.longitude.toFixed(4)}
-                          </p>
-                        </div>
+                    .map((inc) => {
+                      const activeDisp = dispatchByIncidentId.get(inc.id);
+                      let nearestAmb: typeof ambulances[0] | null = null;
+                      if (!activeDisp && inc.status === 'open') {
+                        const availableAmbs = ambulances.filter(
+                          (a) => a.status === 'available' && a.current_latitude != null && a.current_longitude != null
+                        );
+                        let minD = Infinity;
+                        for (const a of availableAmbs) {
+                          const d = haversineKm(inc.latitude, inc.longitude, a.current_latitude!, a.current_longitude!);
+                          if (d < minD) {
+                            minD = d;
+                            nearestAmb = a;
+                          }
+                        }
+                      }
 
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => setFocusedCoords([inc.latitude, inc.longitude])}
-                            title="Focus on Map"
-                            className="p-2 rounded-lg bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-400 text-slate-400 border border-slate-700 transition-colors"
-                          >
-                            <Crosshair className="w-3.5 h-3.5" />
-                          </button>
-                          <Link
-                            to={`/incidents/${inc.id}`}
-                            title="Dispatch Unit"
-                            className="p-2 rounded-lg bg-slate-800 hover:bg-amber-500/20 hover:text-amber-400 text-slate-400 border border-slate-700 transition-colors"
-                          >
-                            <ArrowUpRight className="w-3.5 h-3.5" />
-                          </Link>
+                      return (
+                        <div
+                          key={inc.id}
+                          className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-amber-500/40 transition-all flex items-center justify-between group"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-xs font-mono text-amber-400 uppercase">
+                                ⚠️ {inc.incident_type.replace('_', ' ')}
+                              </span>
+                              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                                {inc.severity || 'alert'}
+                              </span>
+                              {activeDisp && (
+                                <span
+                                  className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border font-bold ${
+                                    activeDisp.status === 'arrived'
+                                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                      : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 animate-pulse'
+                                  }`}
+                                >
+                                  🚑 {activeDisp.status}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] font-mono text-slate-400">
+                              Status: <span className="uppercase text-slate-200">{inc.status}</span>
+                            </p>
+                            <p className="text-[10px] font-mono text-slate-500">
+                              GPS: {inc.latitude.toFixed(4)}, {inc.longitude.toFixed(4)}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {!activeDisp && nearestAmb && (
+                              <button
+                                onClick={() =>
+                                  createDispatchMutation.mutate({ incidentId: inc.id, ambulanceId: nearestAmb!.id })
+                                }
+                                disabled={createDispatchMutation.isPending}
+                                title={`Dispatch nearest ambulance ${nearestAmb.ambulance_code}`}
+                                className="px-2 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] font-bold flex items-center gap-1 transition-colors disabled:opacity-50"
+                              >
+                                <Send className="w-3 h-3" /> Dispatch
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setFocusedCoords([inc.latitude, inc.longitude])}
+                              title="Focus on Map"
+                              className="p-2 rounded-lg bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-400 text-slate-400 border border-slate-700 transition-colors"
+                            >
+                              <Crosshair className="w-3.5 h-3.5" />
+                            </button>
+                            <Link
+                              to={`/incidents/${inc.id}`}
+                              title="Dispatch Unit"
+                              className="p-2 rounded-lg bg-slate-800 hover:bg-amber-500/20 hover:text-amber-400 text-slate-400 border border-slate-700 transition-colors"
+                            >
+                              <ArrowUpRight className="w-3.5 h-3.5" />
+                            </Link>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                 )}
               </div>
             )}
